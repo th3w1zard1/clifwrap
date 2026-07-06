@@ -4,6 +4,7 @@ import os
 import json
 import importlib.util
 import re
+import shutil
 import stat
 import subprocess
 import sys
@@ -230,7 +231,8 @@ class WrapperTests(unittest.TestCase):
         self.assertIn("release-please-config.json must update the frozen CLI version fallback", source)
         self.assertIn("src/clifwrap/__init__.py must mark the frozen CLI version for release-please", source)
         self.assertIn('gh release edit \\"$TAG\\" --repo \\"$GITHUB_REPOSITORY\\" --prerelease=true', source)
-        self.assertIn('gh release edit \\"$TAG\\" --repo \\"$GITHUB_REPOSITORY\\" --prerelease=false', source)
+        self.assertIn('prerelease_false = \'gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease=false\'', source)
+        self.assertIn("must only clear prerelease in publish job after validation succeeds", source)
         self.assertIn("clifwrap-windows-arm64", source)
         self.assertIn("python -m nox -s pages", source)
 
@@ -244,6 +246,35 @@ class WrapperTests(unittest.TestCase):
         sys.modules[spec.name] = module
         spec.loader.exec_module(module)
         module.workflow_contracts()
+
+    def test_release_workflow_contract_checker_rejects_early_stable_release(self) -> None:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("verify_release", ROOT / "scripts" / "verify_release.py")
+        self.assertIsNotNone(spec)
+        module = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+
+        repo = Path(self.temp_dir.name) / "release-contract-repo"
+        shutil.copytree(ROOT / ".github", repo / ".github")
+        shutil.copytree(ROOT / "docs", repo / "docs")
+        shutil.copytree(ROOT / "src", repo / "src")
+        shutil.copy2(ROOT / "release-please-config.json", repo / "release-please-config.json")
+        release_workflow = repo / ".github" / "workflows" / "release.yml"
+        release_text = release_workflow.read_text()
+        release_text = release_text.replace(
+            "      - name: Upload SHA256SUMS",
+            '      - name: Incorrectly clear stable too early\n'
+            '        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease=false\n'
+            "      - name: Upload SHA256SUMS",
+        )
+        release_workflow.write_text(release_text)
+
+        with mock.patch.object(module, "ROOT", repo):
+            with self.assertRaisesRegex(SystemExit, "must only clear prerelease in publish job"):
+                module.workflow_contracts()
 
     def test_release_summary_writer_outputs_machine_readable_evidence(self) -> None:
         import importlib.util

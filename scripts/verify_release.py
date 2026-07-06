@@ -131,10 +131,22 @@ def workflow_contracts() -> None:
         raise SystemExit("release.yml must serialize validation by release tag")
     if "cancel-in-progress: false" not in release_text:
         raise SystemExit("release.yml must not cancel an in-flight release validation")
-    if "gh release edit \"$TAG\" --repo \"$GITHUB_REPOSITORY\" --prerelease=true" not in release_text:
+    prerelease_true = 'gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease=true'
+    prerelease_false = 'gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease=false'
+    if not _job_has_run_fragment(jobs["resolve"], prerelease_true):
         raise SystemExit("release.yml must mark releases prerelease before validation starts")
-    if "gh release edit \"$TAG\" --repo \"$GITHUB_REPOSITORY\" --prerelease=false" not in release_text:
+    if not _job_has_run_fragment(jobs["publish"], prerelease_false):
         raise SystemExit("release.yml must clear prerelease only after validation succeeds")
+    for job_name, job in jobs.items():
+        if job_name == "resolve":
+            continue
+        if _job_has_run_fragment(job, prerelease_true):
+            raise SystemExit(f"release.yml must only mark releases prerelease in resolve job, found in {job_name}")
+    for job_name, job in jobs.items():
+        if job_name == "publish":
+            continue
+        if _job_has_run_fragment(job, prerelease_false):
+            raise SystemExit(f"release.yml must only clear prerelease in publish job after validation succeeds, found in {job_name}")
 
     for job_name in ("package", "binaries"):
         needs = set(_as_list(jobs[job_name].get("needs")))
@@ -244,6 +256,15 @@ def _workflow_jobs(payload: dict[str, object], name: str) -> dict[str, object]:
     if not isinstance(jobs, dict):
         raise SystemExit(f"{name} is missing jobs")
     return jobs
+
+
+def _job_has_run_fragment(job: object, fragment: str) -> bool:
+    if not isinstance(job, dict):
+        return False
+    steps = job.get("steps")
+    if not isinstance(steps, list):
+        return False
+    return any(isinstance(step, dict) and isinstance(step.get("run"), str) and fragment in step["run"] for step in steps)
 
 
 def _as_list(value: object) -> list[str]:
