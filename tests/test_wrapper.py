@@ -1103,6 +1103,9 @@ class WrapperTests(unittest.TestCase):
                 #!/usr/bin/env python3
                 import os
                 import sys
+                if sys.argv[1:2] == ["logins"]:
+                    print("Error: No such command 'logins'.", file=sys.stderr)
+                    sys.exit(2)
                 print(f"upstream:{' '.join(sys.argv[1:])}:{os.environ.get('TAVILY_API_KEY')}")
                 """
             ),
@@ -1681,6 +1684,8 @@ class WrapperTests(unittest.TestCase):
         )
         self.assertEqual(used.returncode, 0, used.stderr)
         self.assertIn("default account set to backup", used.stdout)
+        self.assertNotIn("No such command", used.stderr)
+        self.assertNotIn("low fallback pool", used.stderr)
         listed = subprocess.run(
             ["tvly", "logins"],
             cwd=ROOT,
@@ -1692,6 +1697,8 @@ class WrapperTests(unittest.TestCase):
         self.assertEqual(listed.returncode, 0, listed.stderr)
         self.assertIn("tvly: 2 configured account(s)", listed.stdout)
         self.assertIn("* backup [enabled] TAVILY_API_KEY", listed.stdout)
+        self.assertNotIn("No such command", listed.stderr)
+        self.assertNotIn("low fallback pool", listed.stderr)
         default = subprocess.run(
             ["tvly", "credentials", "default"],
             cwd=ROOT,
