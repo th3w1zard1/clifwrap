@@ -194,8 +194,24 @@ def workflow_contracts() -> None:
         raise SystemExit("dependency-review.yml must skip private repos that do not have Advanced Security dependency review")
 
     release_please_text = (ROOT / ".github" / "workflows" / "release-please.yml").read_text(encoding="utf-8")
+    release_please = _read_workflow(ROOT / ".github" / "workflows" / "release-please.yml", yaml)
     if "workflow_dispatch" not in release_please_text:
         raise SystemExit("release-please.yml must support manual reruns")
+    release_please_permissions = release_please.get("permissions")
+    if not isinstance(release_please_permissions, dict) or release_please_permissions.get("actions") != "write":
+        raise SystemExit("release-please.yml must grant actions: write so created releases can dispatch validation")
+    release_please_jobs = _workflow_jobs(release_please, "release-please.yml")
+    release_please_steps = release_please_jobs.get("release-please", {}).get("steps", [])
+    if not any(isinstance(step, dict) and step.get("id") == "release" and step.get("uses") == "googleapis/release-please-action@v5" for step in release_please_steps):
+        raise SystemExit("release-please.yml must expose release-please outputs with step id 'release'")
+    for required in (
+        "if: ${{ steps.release.outputs.release_created }}",
+        "TAG: ${{ steps.release.outputs.tag_name }}",
+        "gh release edit \"$TAG\" --repo \"$GITHUB_REPOSITORY\" --prerelease=true",
+        "gh workflow run release.yml --repo \"$GITHUB_REPOSITORY\" --ref main -f tag=\"$TAG\"",
+    ):
+        if required not in release_please_text:
+            raise SystemExit(f"release-please.yml is missing required release gate fragment: {required}")
     release_please_config = json.loads((ROOT / "release-please-config.json").read_text(encoding="utf-8"))
     package_config = release_please_config.get("packages", {}).get(".", {})
     extra_files = package_config.get("extra-files", [])
