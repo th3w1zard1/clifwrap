@@ -2603,6 +2603,16 @@ class WrapperTests(unittest.TestCase):
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["replay_count"], 1)
 
+    def test_queue_run_missing_explicit_id_returns_not_found(self) -> None:
+        empty = self._run("queue", "run", "--id", "missing")
+        self.assertEqual(empty.returncode, 1)
+        self.assertEqual(empty.stdout.strip(), "missing: not_found")
+
+        scoped_json = self._run("queue", "run", "somecli", "--id", "missing", "--json")
+        self.assertEqual(scoped_json.returncode, 1)
+        payload = json.loads(scoped_json.stdout)
+        self.assertEqual(payload["results"], [{"id": "missing", "provider": "somecli", "status": "not_found"}])
+
     def test_status_json_check_reports_queue_and_capacity_health(self) -> None:
         target = self.bin_dir / "somecli"
         make_executable(

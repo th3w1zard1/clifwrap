@@ -750,6 +750,14 @@ def replay_queue(provider_name: str | None = None, *, item_id: str | None = None
     if item_id is not None:
         items = [item for item in items if item.id == item_id]
     if not items:
+        if item_id is not None:
+            payload = {"results": [{"id": item_id, "provider": provider_name, "status": "not_found"}]}
+            if json_output:
+                sys.stdout.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+            else:
+                scope = f" for {provider_name}" if provider_name else ""
+                sys.stdout.write(f"{item_id}{scope}: not_found\n")
+            return 1
         payload = {"results": []}
         if json_output:
             sys.stdout.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
