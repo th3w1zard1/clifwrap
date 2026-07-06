@@ -138,6 +138,8 @@ def workflow_contracts() -> None:
     ):
         if required not in release_pr_text:
             raise SystemExit(f"release-pr-validation.yml is missing required validation fragment: {required}")
+    if "cache: pip" in release_pr_text:
+        raise SystemExit("release-pr-validation.yml must not use setup-python pip caching with a read-only token")
 
     release_path = ROOT / ".github" / "workflows" / "release.yml"
     release_text = release_path.read_text(encoding="utf-8")
