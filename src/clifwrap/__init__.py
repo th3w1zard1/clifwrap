@@ -7,7 +7,7 @@ import tomllib
 
 __all__ = ["__version__"]
 
-_FROZEN_VERSION = "0.2.0"  # x-release-please-version
+_FROZEN_VERSION = "0.2.1"  # x-release-please-version
 
 
 def _source_tree_version() -> str:

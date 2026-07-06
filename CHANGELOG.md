@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/th3w1zard1/clifwrap/compare/v0.2.0...v0.2.1) (2026-07-06)
+
+
+### Bug Fixes
+
+* align release packaging metadata ([6d48bc4](https://github.com/th3w1zard1/clifwrap/commit/6d48bc42129ce055d30db974b96d1a901a8830b8))
+
 ## [0.2.0](https://github.com/th3w1zard1/clifwrap/compare/v0.1.0...v0.2.0) (2026-07-06)
 
 
