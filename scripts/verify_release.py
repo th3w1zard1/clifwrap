@@ -125,11 +125,14 @@ def workflow_contracts() -> None:
     if release_pr_versions != expected_python_versions:
         raise SystemExit(f"release-pr-validation.yml Python matrix drifted: expected {expected_python_versions}, got {release_pr_versions}")
     for required in (
+        "workflow_dispatch",
+        "Release pull request head SHA or ref to validate.",
         "pull_request_target",
+        "github.event_name == 'workflow_dispatch'",
         "github.event.pull_request.user.login == 'github-actions[bot]'",
         "github.event.pull_request.head.repo.full_name == github.repository",
         "startsWith(github.event.pull_request.head.ref, 'release-please--branches--main--components--')",
-        "ref: ${{ github.event.pull_request.head.sha }}",
+        "ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.pull_request.head.sha }}",
         "persist-credentials: false",
         "python -m nox -s lint",
         "python -m nox -s compile",
@@ -246,6 +249,7 @@ def workflow_contracts() -> None:
     for required in (
         "if: ${{ steps.release.outputs.release_created }}",
         "TAG: ${{ steps.release.outputs.tag_name }}",
+        "gh workflow run release-pr-validation.yml --repo \"$GITHUB_REPOSITORY\" --ref main -f ref=\"$head_sha\"",
         "gh release edit \"$TAG\" --repo \"$GITHUB_REPOSITORY\" --prerelease=true",
         "gh workflow run release.yml --repo \"$GITHUB_REPOSITORY\" --ref main -f tag=\"$TAG\"",
     ):

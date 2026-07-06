@@ -19,6 +19,16 @@ jobs:
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+      - name: Dispatch release PR validation
+        if: ${{ !steps.release.outputs.release_created }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_BRANCH: release-please--branches--main--components--clifwrap
+        run: |
+          head_sha="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$RELEASE_BRANCH" --json headRefOid --jq '.[0].headRefOid // ""')"
+          if [ -n "$head_sha" ]; then
+            gh workflow run release-pr-validation.yml --repo "$GITHUB_REPOSITORY" --ref main -f ref="$head_sha"
+          fi
       - name: Gate created release through validation
         if: ${{ steps.release.outputs.release_created }}
         env:

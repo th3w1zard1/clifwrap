@@ -1,6 +1,11 @@
 name: Release PR Validation
 
 on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Release pull request head SHA or ref to validate.
+        required: true
   pull_request_target:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
@@ -13,9 +18,12 @@ jobs:
     name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
     if: >-
-      github.event.pull_request.user.login == 'github-actions[bot]' &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      startsWith(github.event.pull_request.head.ref, 'release-please--branches--main--components--')
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.pull_request.user.login == 'github-actions[bot]' &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        startsWith(github.event.pull_request.head.ref, 'release-please--branches--main--components--')
+      )
     strategy:
       fail-fast: false
       matrix:
@@ -23,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.pull_request.head.sha }}
           persist-credentials: false
       - uses: actions/setup-python@v6
         with:

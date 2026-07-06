@@ -219,6 +219,7 @@ class WrapperTests(unittest.TestCase):
         self.assertIn("release-pr-validation.yml Python matrix drifted", source)
         self.assertIn("release-pr-validation.yml is missing required validation fragment", source)
         self.assertIn("release-pr-validation.yml must not use setup-python pip caching", source)
+        self.assertIn("Release pull request head SHA or ref to validate.", source)
         self.assertIn("release.yml validation matrix drifted", source)
         self.assertIn("release.yml must serialize validation by release tag", source)
         self.assertIn("release.yml checksums job must depend on resolve, package, and binaries", source)
@@ -240,6 +241,7 @@ class WrapperTests(unittest.TestCase):
         self.assertIn("clifwrap-windows-arm64", source)
         self.assertIn("python -m nox -s pages", source)
         self.assertIn("persist-credentials: false", source)
+        self.assertIn("gh workflow run release-pr-validation.yml", source)
 
     def test_release_workflow_contract_checker_passes_current_workflows(self) -> None:
         import importlib.util
