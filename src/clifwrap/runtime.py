@@ -732,7 +732,7 @@ def run_app(app: str, args: list[str]) -> int:
             return 69
         if decision.unknown_capacity:
             sys.stderr.write(f"[clifwrap] capacity unknown for {app}; continuing because policy allows it\n")
-        elif decision.account_name:
+        elif decision.capacity_approved and decision.account_name:
             allowed_account_names = {decision.account_name}
     return _run_attempts(app, provider, args, stdin_data, allowed_account_names=allowed_account_names)
 
@@ -777,7 +777,7 @@ def replay_queue(provider_name: str | None = None, *, item_id: str | None = None
                 results.append(result)
                 exit_code = max(exit_code, 1)
                 continue
-            if not decision.unknown_capacity and decision.account_name:
+            if decision.capacity_approved and decision.account_name:
                 allowed_account_names = {decision.account_name}
         updated = _queue_item_pending_update(item, "replay started")
         replace_queue_item(updated)

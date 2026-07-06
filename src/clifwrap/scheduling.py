@@ -29,6 +29,7 @@ class AdmissionDecision:
     estimated_cost: int
     reserve_threshold: int
     account_name: str | None = None
+    capacity_approved: bool = False
     unknown_capacity: bool = False
     queue_item: QueueItem | None = None
     remediation_message: str | None = None
@@ -202,6 +203,7 @@ def admission_decision(
                 estimated_cost=estimated_cost,
                 reserve_threshold=capacity.reserve_threshold,
                 account_name=active_account_name,
+                capacity_approved=True,
             )
     for snapshot in snapshots:
         if snapshot.known and snapshot.remaining >= required_remaining:
@@ -211,6 +213,7 @@ def admission_decision(
                 estimated_cost=estimated_cost,
                 reserve_threshold=capacity.reserve_threshold,
                 account_name=snapshot.account_name,
+                capacity_approved=True,
             )
     if snapshots and all(not snapshot.known for snapshot in snapshots):
         if capacity.unknown_capacity_action == "allow":

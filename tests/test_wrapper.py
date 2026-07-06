@@ -2358,6 +2358,62 @@ class WrapperTests(unittest.TestCase):
         self.assertIn("quota exhausted after admission", proc.stderr)
         self.assertFalse(backup_marker.exists())
 
+    def test_capacity_default_execute_preserves_normal_retry_failover(self) -> None:
+        target = self.bin_dir / "somecli"
+        backup_marker = Path(self.temp_dir.name) / "default-execute-backup-ran.txt"
+        make_executable(
+            target,
+            textwrap.dedent(
+                f"""\
+                #!/usr/bin/env python3
+                import os
+                import sys
+                from pathlib import Path
+
+                account = os.environ.get("CLIFWRAP_ACCOUNT")
+                if account == "primary":
+                    print("primary below reserve failed", file=sys.stderr)
+                    raise SystemExit(9)
+                Path({str(backup_marker)!r}).write_text(account or "")
+                print(account)
+                """
+            ),
+        )
+        self._run("install", "somecli")
+        (self.config_dir / "config.toml").write_text(
+            textwrap.dedent(
+                f"""\
+                [providers.somecli]
+                retry_exit_codes = [9]
+                status_command = ["{sys.executable}", "-c", "import os,json; print(json.dumps({{'remaining': int(os.environ['LEFT'])}}))"]
+
+                [providers.somecli.capacity_control]
+                default_action = "execute"
+                reserve_threshold = 5
+                default_cost = 2
+
+                [[providers.somecli.accounts]]
+                name = "primary"
+                env = {{ LEFT = "1" }}
+
+                [[providers.somecli.accounts]]
+                name = "backup"
+                env = {{ LEFT = "1" }}
+                """
+            )
+        )
+        proc = subprocess.run(
+            ["somecli", "search"],
+            cwd=ROOT,
+            env=self.env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.stdout.strip(), "backup")
+        self.assertEqual(backup_marker.read_text(), "backup")
+
     def test_queue_decision_persists_and_queue_list_reports_item(self) -> None:
         target = self.bin_dir / "somecli"
         touched = Path(self.temp_dir.name) / "upstream-ran.txt"
