@@ -2925,6 +2925,55 @@ class WrapperTests(unittest.TestCase):
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("Malformed queue state", proc.stderr)
 
+    def test_queue_run_surfaces_malformed_queue_state_as_json_error(self) -> None:
+        queue_path = self.state_dir / "queue.json"
+        queue_path.write_text("{not json\n")
+        proc = self._run("queue", "run", "somecli", "--json")
+        self.assertEqual(proc.returncode, 1)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["results"], [])
+        self.assertIn("Malformed queue state", payload["error"])
+        self.assertNotIn("Traceback", proc.stderr)
+
+    def test_wrapped_queue_decision_surfaces_malformed_queue_state_without_traceback(self) -> None:
+        target = self.bin_dir / "somecli"
+        touched = Path(self.temp_dir.name) / "unexpected-upstream.txt"
+        make_executable(
+            target,
+            f"#!/usr/bin/env python3\nfrom pathlib import Path\nPath({str(touched)!r}).write_text('ran')\n",
+        )
+        self._run("install", "somecli")
+        (self.config_dir / "config.toml").write_text(
+            textwrap.dedent(
+                f"""\
+                [providers.somecli]
+                status_command = ["{sys.executable}", "-c", "import json; print(json.dumps({{'remaining': 1}}))"]
+
+                [providers.somecli.capacity_control]
+                default_action = "queue"
+                reserve_threshold = 5
+                default_cost = 2
+
+                [[providers.somecli.accounts]]
+                name = "only"
+                """
+            )
+        )
+        (self.state_dir / "queue.json").write_text("{not json\n")
+        proc = subprocess.run(
+            ["somecli", "search"],
+            cwd=ROOT,
+            env=self.env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        self.assertEqual(proc.returncode, 74)
+        self.assertFalse(touched.exists())
+        self.assertIn("[clifwrap] queue state error for somecli", proc.stderr)
+        self.assertIn("Malformed queue state", proc.stderr)
+        self.assertNotIn("Traceback", proc.stderr)
+
     def test_queue_list_surfaces_invalid_stdin_payload(self) -> None:
         queue_path = self.state_dir / "queue.json"
         queue_path.write_text(

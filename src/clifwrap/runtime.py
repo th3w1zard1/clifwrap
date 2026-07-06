@@ -716,7 +716,11 @@ def run_app(app: str, args: list[str]) -> int:
     allowed_account_names: set[str] | None = None
     if args and has_capacity_control(provider) and _enabled_accounts(provider):
         stdin_data = _capture_stdin()
-        decision = _admission(provider, args, stdin_data)
+        try:
+            decision = _admission(provider, args, stdin_data)
+        except (OSError, ValueError) as exc:
+            sys.stderr.write(f"[clifwrap] queue state error for {app}: {exc}\n")
+            return 74
         if decision.action == "queue":
             item = decision.queue_item
             sys.stderr.write(f"[clifwrap] deferred {app} {' '.join(args)}: {decision.reason}\n")
@@ -746,7 +750,14 @@ def _queue_item_pending_update(item: QueueItem, reason: str) -> QueueItem:
 
 def replay_queue(provider_name: str | None = None, *, item_id: str | None = None, json_output: bool = False) -> int:
     config = load_config()
-    items = list_queue_items(provider_name)
+    try:
+        items = list_queue_items(provider_name)
+    except ValueError as exc:
+        if json_output:
+            sys.stdout.write(json.dumps({"error": str(exc), "results": []}, indent=2, sort_keys=True) + "\n")
+        else:
+            sys.stderr.write(f"[clifwrap] queue state error: {exc}\n")
+        return 1
     if item_id is not None:
         items = [item for item in items if item.id == item_id]
     if not items:
