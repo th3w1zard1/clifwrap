@@ -1,0 +1,60 @@
+name: Release PR Validation
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.pull_request.user.login == 'github-actions[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'release-please--branches--main--components--')
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Download actionlint
+        id: get_actionlint
+        if: matrix.python-version == '3.14'
+        run: bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+        shell: bash
+      - name: Actionlint
+        if: matrix.python-version == '3.14'
+        run: ${{ steps.get_actionlint.outputs.executable }} -color
+        shell: bash
+      - name: Install package
+        run: python -m pip install -e ".[dev]"
+      - name: Ruff
+        if: matrix.python-version == '3.14'
+        run: python -m nox -s lint
+      - name: Tests
+        run: python -m nox -s tests-${{ matrix.python-version }}
+      - name: Compile
+        if: matrix.python-version == '3.14'
+        run: python -m nox -s compile
+      - name: Build sdist and wheel
+        if: matrix.python-version == '3.14'
+        run: python -m nox -s build
+      - name: Upload test report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: release-pr-pytest-${{ matrix.python-version }}
+          path: reports/
+          if-no-files-found: ignore

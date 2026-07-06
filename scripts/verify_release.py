@@ -114,6 +114,31 @@ def workflow_contracts() -> None:
         if required not in ci_text:
             raise SystemExit(f"ci.yml is missing required validation fragment: {required}")
 
+    release_pr_path = ROOT / ".github" / "workflows" / "release-pr-validation.yml"
+    release_pr_text = release_pr_path.read_text(encoding="utf-8")
+    release_pr = _read_workflow(release_pr_path, yaml)
+    release_pr_jobs = _workflow_jobs(release_pr, "release-pr-validation.yml")
+    release_pr_validate = release_pr_jobs.get("validate")
+    if not isinstance(release_pr_validate, dict):
+        raise SystemExit("release-pr-validation.yml missing validate job")
+    release_pr_versions = release_pr_validate.get("strategy", {}).get("matrix", {}).get("python-version")
+    if release_pr_versions != expected_python_versions:
+        raise SystemExit(f"release-pr-validation.yml Python matrix drifted: expected {expected_python_versions}, got {release_pr_versions}")
+    for required in (
+        "pull_request_target",
+        "github.event.pull_request.user.login == 'github-actions[bot]'",
+        "github.event.pull_request.head.repo.full_name == github.repository",
+        "startsWith(github.event.pull_request.head.ref, 'release-please--branches--main--components--')",
+        "ref: ${{ github.event.pull_request.head.sha }}",
+        "persist-credentials: false",
+        "python -m nox -s lint",
+        "python -m nox -s compile",
+        "python -m nox -s build",
+        "actions/upload-artifact",
+    ):
+        if required not in release_pr_text:
+            raise SystemExit(f"release-pr-validation.yml is missing required validation fragment: {required}")
+
     release_path = ROOT / ".github" / "workflows" / "release.yml"
     release_text = release_path.read_text(encoding="utf-8")
     release = _read_workflow(release_path, yaml)
@@ -295,6 +320,7 @@ def inspect_archives() -> None:
         ".github/workflows/codeql.yml",
         ".github/workflows/dependency-review.yml",
         ".github/workflows/pages.yml",
+        ".github/workflows/release-pr-validation.yml",
         ".github/workflows/release-please.yml",
         ".github/workflows/release.yml",
         "CHANGELOG.md",

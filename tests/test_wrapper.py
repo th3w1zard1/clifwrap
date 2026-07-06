@@ -187,6 +187,7 @@ class WrapperTests(unittest.TestCase):
             ".github/workflows/codeql.yml",
             ".github/workflows/dependency-review.yml",
             ".github/workflows/pages.yml",
+            ".github/workflows/release-pr-validation.yml",
             ".github/workflows/release-please.yml",
             ".github/workflows/release.yml",
             "docs/RESEARCH.md",
@@ -215,6 +216,8 @@ class WrapperTests(unittest.TestCase):
         self.assertIn("workflow_contracts()", source)
         self.assertIn("workflow-contracts", source)
         self.assertIn("ci.yml Python matrix drifted", source)
+        self.assertIn("release-pr-validation.yml Python matrix drifted", source)
+        self.assertIn("release-pr-validation.yml is missing required validation fragment", source)
         self.assertIn("release.yml validation matrix drifted", source)
         self.assertIn("release.yml must serialize validation by release tag", source)
         self.assertIn("release.yml checksums job must depend on resolve, package, and binaries", source)
@@ -235,6 +238,7 @@ class WrapperTests(unittest.TestCase):
         self.assertIn("must only clear prerelease in publish job after validation succeeds", source)
         self.assertIn("clifwrap-windows-arm64", source)
         self.assertIn("python -m nox -s pages", source)
+        self.assertIn("persist-credentials: false", source)
 
     def test_release_workflow_contract_checker_passes_current_workflows(self) -> None:
         import importlib.util
