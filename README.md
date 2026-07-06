@@ -66,12 +66,12 @@ Config lives at `~/.config/clifwrap/config.toml` by default. Override it with `C
 [[providers.tvly.accounts]]
 name = "acct-a"
 env_files = ["~/.config/secrets.env"]
-env = { TAVILY_API_KEY = "env:TAVILY_API_KEY" }
+env = { TAVILY_API_KEY = "env:TAVILY_TEAM_A_KEY" }
 
 [[providers.tvly.accounts]]
 name = "acct-b"
 env_files = ["~/.config/secrets.env"]
-env = { TAVILY_API_KEY = "env:TAVILY_API_KEY2" }
+env = { TAVILY_API_KEY = "env:TAVILY_TEAM_B_KEY" }
 ```
 
 ### Minimal Firecrawl
@@ -80,12 +80,12 @@ env = { TAVILY_API_KEY = "env:TAVILY_API_KEY2" }
 [[providers.firecrawl.accounts]]
 name = "team-a"
 env_files = ["~/.config/secrets.env"]
-env = { FIRECRAWL_API_KEY = "env:FIRECRAWL_API_KEY_A" }
+env = { FIRECRAWL_API_KEY = "env:FIRECRAWL_TEAM_A_KEY" }
 
 [[providers.firecrawl.accounts]]
 name = "team-b"
 env_files = ["~/.config/secrets.env"]
-env = { FIRECRAWL_API_KEY = "env:FIRECRAWL_API_KEY_B" }
+env = { FIRECRAWL_API_KEY = "env:FIRECRAWL_TEAM_B_KEY" }
 ```
 
 The built-in Tavily and Firecrawl retry rules, auth-management command names, and usage endpoints live in the packaged catalog at `src/clifwrap/providers.toml`. User config only needs account definitions unless you want to override provider behavior.
@@ -138,7 +138,7 @@ tvly logins
 tvly logins use acct-b
 tvly credentials default
 tvly auth use acct-b
-tvly auth add acct-c --env-file ~/.config/secrets.env --env-ref TAVILY_API_KEY=TAVILY_API_KEY3
+tvly auth add acct-c --env-file ~/.config/secrets.env --env-ref TAVILY_API_KEY=TAVILY_TEAM_C_KEY
 tvly auth add acct-d --env-command TAVILY_API_KEY='secret-tool lookup service tavily account acct-d'
 tvly auth disable acct-c
 tvly auth enable acct-c
@@ -147,7 +147,7 @@ tvly auth remove acct-c
 firecrawl login accounts
 firecrawl accounts
 firecrawl login use team-b
-firecrawl login add team-c --env-file ~/.config/secrets.env --env-ref FIRECRAWL_API_KEY=FIRECRAWL_API_KEY_C
+firecrawl login add team-c --env-file ~/.config/secrets.env --env-ref FIRECRAWL_API_KEY=FIRECRAWL_TEAM_C_KEY
 firecrawl login add team-d --env-command FIRECRAWL_API_KEY='secret-tool lookup service firecrawl account team-d'
 firecrawl login disable team-c
 firecrawl login remove team-c
