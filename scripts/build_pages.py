@@ -5,6 +5,7 @@ import argparse
 import html
 import re
 import shutil
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
@@ -142,6 +143,33 @@ def page(title: str, body: str) -> str:
 """
 
 
+def junit_summary(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    try:
+        root = ET.parse(path).getroot()
+    except ET.ParseError:
+        return "JUnit XML is present but could not be parsed."
+
+    suites = [root] if root.tag == "testsuite" else list(root.iter("testsuite"))
+    if not suites:
+        return "JUnit XML is present but contains no test suite counts."
+    totals = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
+    for suite in suites:
+        for key in totals:
+            value = suite.attrib.get(key, "0")
+            try:
+                totals[key] += int(value)
+            except ValueError:
+                return "JUnit XML is present but contains non-integer test counts."
+    passed = totals["tests"] - totals["failures"] - totals["errors"] - totals["skipped"]
+    status = "passing" if totals["failures"] == 0 and totals["errors"] == 0 else "failing"
+    return (
+        f"{totals['tests']} tests, {passed} passed, {totals['failures']} failures, "
+        f"{totals['errors']} errors, {totals['skipped']} skipped ({status})."
+    )
+
+
 def build(site: Path) -> None:
     site.mkdir(parents=True, exist_ok=True)
     docs_out = site / "docs"
@@ -166,8 +194,9 @@ def build(site: Path) -> None:
     reports = []
     if (site / "pytest.html").exists():
         reports.append('<a class="card" href="pytest.html"><strong>pytest HTML</strong><span>Latest rendered test report.</span></a>')
-    if (site / "junit.xml").exists():
-        reports.append('<a class="card" href="junit.xml"><strong>JUnit XML</strong><span>Machine-readable pytest results.</span></a>')
+    junit = site / "junit.xml"
+    if junit.exists():
+        reports.append(f'<a class="card" href="junit.xml"><strong>JUnit XML</strong><span>{html.escape(junit_summary(junit) or "Machine-readable pytest results.")}</span></a>')
     if (site / "release-summary.json").exists():
         reports.append('<a class="card" href="release-summary.json"><strong>Release Summary JSON</strong><span>Machine-readable local release verification proof.</span></a>')
     if not reports:
