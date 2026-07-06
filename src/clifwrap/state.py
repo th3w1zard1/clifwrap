@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import time
 import uuid
@@ -157,6 +159,11 @@ def _queue_item_from_raw(raw: dict[str, Any], *, index: int) -> QueueItem:
     stdin_b64 = raw.get("stdin_b64")
     if stdin_b64 is not None and not isinstance(stdin_b64, str):
         raise ValueError(f"queue item {index} has invalid stdin_b64")
+    if isinstance(stdin_b64, str):
+        try:
+            base64.b64decode(stdin_b64.encode("ascii"), validate=True)
+        except (UnicodeEncodeError, binascii.Error) as exc:
+            raise ValueError(f"queue item {index} has invalid stdin_b64") from exc
     policy_snapshot = raw.get("policy_snapshot")
     if not isinstance(policy_snapshot, dict):
         raise ValueError(f"queue item {index} has invalid policy_snapshot")

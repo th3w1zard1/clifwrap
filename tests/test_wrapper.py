@@ -2920,6 +2920,32 @@ class WrapperTests(unittest.TestCase):
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("Malformed queue state", proc.stderr)
 
+    def test_queue_list_surfaces_invalid_stdin_payload(self) -> None:
+        queue_path = self.state_dir / "queue.json"
+        queue_path.write_text(
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "id": "badstdin",
+                            "provider": "somecli",
+                            "argv": ["search"],
+                            "stdin_b64": "not valid base64!",
+                            "enqueued_at": 1,
+                            "replay_count": 0,
+                            "reason": "bad payload",
+                            "policy_snapshot": {},
+                            "expires_at": 9999999999,
+                        }
+                    ]
+                }
+            )
+            + "\n"
+        )
+        proc = self._run("queue", "list", "somecli")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("invalid stdin_b64", proc.stderr)
+
     def test_status_reports_queue_state_error_without_deleting_data(self) -> None:
         (self.config_dir / "config.toml").write_text(
             textwrap.dedent(
