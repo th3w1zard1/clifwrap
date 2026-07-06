@@ -23,6 +23,7 @@ sys.path.insert(0, str(ROOT / "src"))
 DYNAMIC_LOOP = ROOT / "scripts" / "tavily_dynamic_research_loop.py"
 FIRECRAWL_BOOTSTRAP = ROOT / "scripts" / "firecrawl_requested_accounts.py"
 FIRECRAWL_BOOTSTRAP_SPEC = ROOT / "scripts" / "firecrawl_requested_accounts.toml"
+FIRECRAWL_LOGIN_SEQUENCE = ROOT / "scripts" / "firecrawl_login_sequence.py"
 CLI_REFERENCE = ROOT / "docs" / "cli-reference.md"
 PROVIDER_CATALOG = ROOT / "docs" / "provider-catalog.md"
 RELEASE_MANIFEST_SCHEMA = ROOT / "docs" / "schemas" / "release-manifest.v1.json"
@@ -31,6 +32,15 @@ RELEASE_MANIFEST_SCHEMA = ROOT / "docs" / "schemas" / "release-manifest.v1.json"
 def make_executable(path: Path, contents: str) -> None:
     path.write_text(contents)
     path.chmod(path.stat().st_mode | stat.S_IXUSR)
+
+
+def load_script_module(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 class WrapperTests(unittest.TestCase):
@@ -82,12 +92,7 @@ class WrapperTests(unittest.TestCase):
             self.assertNotIn(forbidden, combined)
 
     def test_dynamic_tavily_loop_discovers_accounts_without_local_name_literals(self) -> None:
-        spec = importlib.util.spec_from_file_location("tavily_dynamic_research_loop", DYNAMIC_LOOP)
-        self.assertIsNotNone(spec)
-        module = importlib.util.module_from_spec(spec)
-        assert spec and spec.loader
-        sys.modules[spec.name] = module
-        spec.loader.exec_module(module)
+        module = load_script_module("tavily_dynamic_research_loop", DYNAMIC_LOOP)
         output = textwrap.dedent(
             """\
             tvly: 3 configured account(s)
@@ -121,6 +126,98 @@ class WrapperTests(unittest.TestCase):
         self.assertIn('["clifwrap", "account", "import-spec", args.spec]', source)
         self.assertNotIn("https://api.firecrawl.dev", source)
         self.assertIsNone(re.search(r"fc-[A-Za-z0-9_-]{8,}", source))
+
+    def test_firecrawl_login_sequence_skips_existing_sources_without_login_or_secret_output(self) -> None:
+        module = load_script_module("firecrawl_login_sequence_skip", FIRECRAWL_LOGIN_SEQUENCE)
+        spec = Path(self.temp_dir.name) / "firecrawl.toml"
+        env_file = Path(self.temp_dir.name) / "secrets.env"
+        credentials = Path(self.temp_dir.name) / "credentials.json"
+        env_file.write_text('CLIFWRAP_FIRECRAWL_TEAM_A_FIRECRAWL_API_KEY="existing-secret"\n')
+        credentials.write_text('{"apiKey": "should-not-read"}\n')
+        spec.write_text(
+            textwrap.dedent(
+                f"""\
+                provider = "firecrawl"
+                target_env = "FIRECRAWL_API_KEY"
+                env_file = "{env_file}"
+                env_name_template = "CLIFWRAP_{{provider_slug}}_{{account_slug}}_{{target_env_slug}}"
+
+                [[accounts]]
+                label = "team-a"
+                """
+            )
+        )
+        output = StringIO()
+        with mock.patch.object(
+            sys,
+            "argv",
+            [
+                "firecrawl_login_sequence.py",
+                "--spec",
+                str(spec),
+                "--credentials",
+                str(credentials),
+                "--assume-ready",
+                "--skip-import",
+            ],
+        ):
+            with mock.patch.object(module.subprocess, "run") as run:
+                with redirect_stdout(output):
+                    rc = module.main()
+        self.assertEqual(rc, 0)
+        run.assert_not_called()
+        self.assertIn("already has CLIFWRAP_FIRECRAWL_TEAM_A_FIRECRAWL_API_KEY", output.getvalue())
+        self.assertNotIn("existing-secret", output.getvalue())
+
+    def test_firecrawl_login_sequence_captures_key_then_imports_without_printing_secret(self) -> None:
+        module = load_script_module("firecrawl_login_sequence_capture", FIRECRAWL_LOGIN_SEQUENCE)
+        spec = Path(self.temp_dir.name) / "firecrawl.toml"
+        env_file = Path(self.temp_dir.name) / "secrets.env"
+        credentials = Path(self.temp_dir.name) / "credentials.json"
+        credentials.write_text('{"apiKey": "old-secret"}\n')
+        spec.write_text(
+            textwrap.dedent(
+                f"""\
+                provider = "firecrawl"
+                target_env = "FIRECRAWL_API_KEY"
+                env_file = "{env_file}"
+                env_name_template = "CLIFWRAP_{{provider_slug}}_{{account_slug}}_{{target_env_slug}}"
+
+                [[accounts]]
+                label = "team-a"
+                """
+            )
+        )
+
+        def fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+            if command[:2] == ["firecrawl", "login"]:
+                credentials.write_text('{"apiKey": "new-secret"}\n')
+            return subprocess.CompletedProcess(command, 0)
+
+        output = StringIO()
+        with mock.patch.object(
+            sys,
+            "argv",
+            [
+                "firecrawl_login_sequence.py",
+                "--spec",
+                str(spec),
+                "--credentials",
+                str(credentials),
+                "--assume-ready",
+            ],
+        ):
+            with mock.patch.object(module.subprocess, "run", side_effect=fake_run) as run:
+                with redirect_stdout(output):
+                    rc = module.main()
+        self.assertEqual(rc, 0)
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertIn(["firecrawl", "logout"], commands)
+        self.assertIn(["firecrawl", "login", "--method", "browser"], commands)
+        self.assertIn(["clifwrap", "account", "import-spec", str(spec), "--env-file", str(env_file), "--apply"], commands)
+        self.assertIn('CLIFWRAP_FIRECRAWL_TEAM_A_FIRECRAWL_API_KEY="new-secret"', env_file.read_text())
+        self.assertIn("secret value was not printed", output.getvalue())
+        self.assertNotIn("new-secret", output.getvalue())
 
     def test_install_and_uninstall_are_reversible(self) -> None:
         target = self.bin_dir / "tvly"
