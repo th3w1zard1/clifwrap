@@ -16,7 +16,7 @@ Dependabot opens grouped weekly update pull requests for Python dependencies and
 
 ## Reporting a Vulnerability
 
-Report suspected vulnerabilities through GitHub private vulnerability reporting or GitHub Security Advisories for `github.com/clifwrap/clifwrap`.
+Report suspected vulnerabilities through GitHub private vulnerability reporting or GitHub Security Advisories for `github.com/th3w1zard1/clifwrap`.
 
 If the GitHub repository is not available yet, contact the maintainers privately through the same trusted channel used to receive release artifacts. Do not open a public issue with secret values, tokens, or exploit details.
 
