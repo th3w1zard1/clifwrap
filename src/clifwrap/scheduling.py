@@ -5,7 +5,7 @@ import time
 from dataclasses import dataclass
 
 from .config import AccountConfig, CapacityControlConfig, ProviderConfig
-from .state import QueueItem, UsageCacheEntry, enqueue_queue_item, get_usage_cache_entry, list_queue_items, replace_queue_item, set_usage_cache_entry
+from .state import QueueItem, UsageCacheEntry, drop_queue_items, enqueue_queue_item, get_usage_cache_entry, list_queue_items, replace_queue_item, set_usage_cache_entry
 
 
 @dataclass
@@ -145,6 +145,7 @@ def _enqueue_decision(
 ) -> AdmissionDecision:
     assert provider.capacity_control is not None
     capacity = provider.capacity_control
+    drop_queue_items(provider=provider.name, expired_only=True)
     queue_items = list_queue_items(provider.name)
     if existing_item is None and len(queue_items) >= capacity.queue_max_items:
         return AdmissionDecision(

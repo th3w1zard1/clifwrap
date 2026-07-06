@@ -2858,6 +2858,61 @@ class WrapperTests(unittest.TestCase):
         self.assertEqual(len(remaining_payload["items"]), 1)
         self.assertEqual(remaining_payload["items"][0]["argv"], ["search", "fresh"])
 
+    def test_queue_decision_prunes_expired_items_before_queue_limit(self) -> None:
+        from clifwrap.state import enqueue_queue_item
+
+        target = self.bin_dir / "somecli"
+        make_executable(
+            target,
+            "#!/usr/bin/env python3\nprint('unexpected upstream execution')\n",
+        )
+        self._run("install", "somecli")
+        with mock.patch.dict(os.environ, self.env, clear=True):
+            enqueue_queue_item(
+                "somecli",
+                ["search", "expired"],
+                None,
+                "expired item",
+                {"default_action": "queue"},
+                retention_seconds=1,
+            )
+        queue_path = self.state_dir / "queue.json"
+        payload = json.loads(queue_path.read_text())
+        payload["items"][0]["expires_at"] = 1
+        queue_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        (self.config_dir / "config.toml").write_text(
+            textwrap.dedent(
+                f"""\
+                [providers.somecli]
+                status_command = ["{sys.executable}", "-c", "import json; print(json.dumps({{'remaining': 1}}))"]
+
+                [providers.somecli.capacity_control]
+                default_action = "queue"
+                reserve_threshold = 5
+                default_cost = 2
+                queue_retention_seconds = 120
+                queue_max_items = 1
+
+                [[providers.somecli.accounts]]
+                name = "only"
+                """
+            )
+        )
+        queued = subprocess.run(
+            ["somecli", "search", "new"],
+            cwd=ROOT,
+            env=self.env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        self.assertEqual(queued.returncode, 73, queued.stderr)
+        self.assertIn("queued as", queued.stderr)
+        listed = self._run("queue", "list", "somecli", "--json")
+        items = json.loads(listed.stdout)["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["argv"], ["search", "new"])
+
     def test_queue_list_surfaces_malformed_queue_state(self) -> None:
         queue_path = self.state_dir / "queue.json"
         queue_path.write_text("{not json\n")
