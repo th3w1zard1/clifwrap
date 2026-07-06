@@ -226,8 +226,8 @@ class WrapperTests(unittest.TestCase):
         self.assertIn("codeql.yml must skip private repos", source)
         self.assertIn("dependency-review.yml must skip private repos", source)
         self.assertIn("release-please.yml must support manual reruns", source)
-        self.assertIn('gh release edit \\"$TAG\\" --prerelease=true', source)
-        self.assertIn('gh release edit \\"$TAG\\" --prerelease=false', source)
+        self.assertIn('gh release edit \\"$TAG\\" --repo \\"$GITHUB_REPOSITORY\\" --prerelease=true', source)
+        self.assertIn('gh release edit \\"$TAG\\" --repo \\"$GITHUB_REPOSITORY\\" --prerelease=false', source)
         self.assertIn("clifwrap-windows-arm64", source)
         self.assertIn("python -m nox -s pages", source)
 

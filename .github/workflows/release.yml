@@ -39,7 +39,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.release.outputs.tag }}
-        run: gh release edit "$TAG" --prerelease=true
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease=true
 
   validate:
     name: Validate Python ${{ matrix.python-version }}
@@ -104,7 +104,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.resolve.outputs.tag }}
-        run: gh release upload "$TAG" dist/* --clobber
+        run: gh release upload "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber
 
   binaries:
     name: ${{ matrix.asset }}
@@ -193,9 +193,9 @@ jobs:
         shell: bash
         run: |
           if [ "$ARCHIVE" = "zip" ]; then
-            gh release upload "$TAG" "artifacts/$ASSET.zip" --clobber
+            gh release upload "$TAG" "artifacts/$ASSET.zip" --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release upload "$TAG" "artifacts/$ASSET.tar.gz" --clobber
+            gh release upload "$TAG" "artifacts/$ASSET.tar.gz" --repo "$GITHUB_REPOSITORY" --clobber
           fi
 
   checksums:
@@ -209,7 +209,7 @@ jobs:
           TAG: ${{ needs.resolve.outputs.tag }}
         run: |
           mkdir -p release-assets
-          gh release download "$TAG" --dir release-assets --clobber --pattern "clifwrap-*"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir release-assets --clobber --pattern "clifwrap-*"
       - name: Generate SHA256SUMS
         run: |
           cd release-assets
@@ -249,12 +249,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.resolve.outputs.tag }}
-        run: gh release upload "$TAG" release-assets/SHA256SUMS --clobber
+        run: gh release upload "$TAG" release-assets/SHA256SUMS --repo "$GITHUB_REPOSITORY" --clobber
       - name: Upload RELEASE-MANIFEST.json
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.resolve.outputs.tag }}
-        run: gh release upload "$TAG" release-assets/RELEASE-MANIFEST.json --clobber
+        run: gh release upload "$TAG" release-assets/RELEASE-MANIFEST.json --repo "$GITHUB_REPOSITORY" --clobber
 
   publish:
     name: Mark release stable
@@ -265,4 +265,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.resolve.outputs.tag }}
-        run: gh release edit "$TAG" --prerelease=false
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease=false

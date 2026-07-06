@@ -108,9 +108,9 @@ def workflow_contracts() -> None:
         raise SystemExit("release.yml must serialize validation by release tag")
     if "cancel-in-progress: false" not in release_text:
         raise SystemExit("release.yml must not cancel an in-flight release validation")
-    if "gh release edit \"$TAG\" --prerelease=true" not in release_text:
+    if "gh release edit \"$TAG\" --repo \"$GITHUB_REPOSITORY\" --prerelease=true" not in release_text:
         raise SystemExit("release.yml must mark releases prerelease before validation starts")
-    if "gh release edit \"$TAG\" --prerelease=false" not in release_text:
+    if "gh release edit \"$TAG\" --repo \"$GITHUB_REPOSITORY\" --prerelease=false" not in release_text:
         raise SystemExit("release.yml must clear prerelease only after validation succeeds")
 
     for job_name in ("package", "binaries"):
@@ -119,7 +119,7 @@ def workflow_contracts() -> None:
             raise SystemExit(f"release.yml {job_name} job must depend on resolve and validate")
     if set(_as_list(jobs["checksums"].get("needs"))) != {"resolve", "package", "binaries"}:
         raise SystemExit("release.yml checksums job must depend on resolve, package, and binaries")
-    for required in ("Generate RELEASE-MANIFEST.json", "gh release upload \"$TAG\" release-assets/RELEASE-MANIFEST.json --clobber"):
+    for required in ("Generate RELEASE-MANIFEST.json", "gh release upload \"$TAG\" release-assets/RELEASE-MANIFEST.json --repo \"$GITHUB_REPOSITORY\" --clobber"):
         if required not in release_text:
             raise SystemExit(f"release.yml is missing required release manifest fragment: {required}")
 
