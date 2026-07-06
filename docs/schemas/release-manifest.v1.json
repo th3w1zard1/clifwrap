@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://clifwrap.github.io/schemas/release-manifest.v1.json",
+  "$id": "https://th3w1zard1.github.io/clifwrap/schemas/release-manifest.v1.json",
   "title": "clifwrap release manifest",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "project", "generated_at", "artifacts"],
   "properties": {
     "schema": {
-      "const": "https://clifwrap.github.io/schemas/release-manifest.v1.json"
+      "const": "https://th3w1zard1.github.io/clifwrap/schemas/release-manifest.v1.json"
     },
     "project": {
       "const": "clifwrap"

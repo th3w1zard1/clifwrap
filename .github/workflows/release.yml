@@ -163,6 +163,7 @@ jobs:
           ASSET: ${{ matrix.asset }}
           BINARY: ${{ matrix.binary }}
           ARCHIVE: ${{ matrix.archive }}
+        shell: bash
         run: |
           python - <<'PY'
           import os
@@ -219,6 +220,7 @@ jobs:
       - name: Generate RELEASE-MANIFEST.json
         env:
           TAG: ${{ needs.resolve.outputs.tag }}
+        shell: bash
         run: |
           cd release-assets
           python - <<'PY'
@@ -230,7 +232,7 @@ jobs:
 
           artifacts = sorted(Path(".").glob("clifwrap-*"))
           manifest = {
-              "schema": "https://clifwrap.github.io/schemas/release-manifest.v1.json",
+              "schema": "https://th3w1zard1.github.io/clifwrap/schemas/release-manifest.v1.json",
               "project": "clifwrap",
               "tag": os.environ["TAG"],
               "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),

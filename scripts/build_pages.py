@@ -179,7 +179,7 @@ def build(site: Path) -> None:
   <span class="badge">release proof included</span>
   <h1>clifwrap</h1>
   <p>Transparent account failover, quota-aware scheduling, and wrapper-managed auth for CLIs such as Tavily and Firecrawl.</p>
-  <div class="grid">{''.join(reports)}<a class="card" href="https://github.com/clifwrap/clifwrap"><strong>GitHub</strong><span>Source repository and releases.</span></a></div>
+  <div class="grid">{''.join(reports)}<a class="card" href="https://github.com/th3w1zard1/clifwrap"><strong>GitHub</strong><span>Source repository and releases.</span></a></div>
 </header>
 <h2>Documentation</h2>
 <div class="grid">{''.join(doc_cards)}</div>

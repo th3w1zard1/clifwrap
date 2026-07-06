@@ -16,7 +16,7 @@ python -m nox -s lint compile build
 
 The workflow invokes the same Nox sessions defined in `noxfile.py` so local and hosted validation do not drift. Generated docs such as `docs/cli-reference.md` and `docs/provider-catalog.md` are checked during release verification.
 
-The Pages workflow always builds an HTML pytest report, JUnit XML, rendered project docs, schema files, and a `release-summary.json` proof file. Public repositories deploy those files to `https://clifwrap.github.io`; private repositories upload the generated `site/` directory as a normal Actions artifact because GitHub Pages for private repositories depends on the account plan.
+The Pages workflow always builds an HTML pytest report, JUnit XML, rendered project docs, schema files, and a `release-summary.json` proof file. Public repositories deploy those files to `https://th3w1zard1.github.io/clifwrap/`; private repositories upload the generated `site/` directory as a normal Actions artifact because GitHub Pages for private repositories depends on the account plan.
 
 The CodeQL workflow runs Python code scanning on pushes, pull requests, a weekly schedule, and manual dispatch when the repository is public or otherwise has code scanning enabled. Private repositories without GitHub Advanced Security skip the scan instead of failing every push.
 
@@ -41,7 +41,7 @@ nox -s release-verify -- --require-actionlint
 
 Install `actionlint` locally and pass `--require-actionlint` when you want the local run to fail if GitHub Actions semantic linting cannot run. CI downloads and runs `actionlint` automatically.
 
-The local verifier also writes and validates `dist/SHA256SUMS` and `dist/RELEASE-MANIFEST.json` for the locally built release artifacts before removing generated files. The manifest schema is versioned in `docs/schemas/release-manifest.v1.json` and published by Pages at `https://clifwrap.github.io/schemas/release-manifest.v1.json`.
+The local verifier also writes and validates `dist/SHA256SUMS` and `dist/RELEASE-MANIFEST.json` for the locally built release artifacts before removing generated files. The manifest schema is versioned in `docs/schemas/release-manifest.v1.json` and published by Pages at `https://th3w1zard1.github.io/clifwrap/schemas/release-manifest.v1.json`.
 
 Pass `--summary-json <path>` to write a machine-readable proof summary after all checks pass. The summary includes timestamps, Python/runtime platform details, selected verifier options, completed check names, and release artifact names observed before cleanup.
 

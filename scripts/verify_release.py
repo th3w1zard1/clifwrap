@@ -18,13 +18,36 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
-RELEASE_MANIFEST_SCHEMA_URL = "https://clifwrap.github.io/schemas/release-manifest.v1.json"
+RELEASE_MANIFEST_SCHEMA_URL = "https://th3w1zard1.github.io/clifwrap/schemas/release-manifest.v1.json"
 RELEASE_MANIFEST_SCHEMA = ROOT / "docs" / "schemas" / "release-manifest.v1.json"
 
 
 def run(command: list[str], *, cwd: Path = ROOT, env: dict[str, str] | None = None) -> None:
     print("+ " + " ".join(command), flush=True)
     subprocess.run(command, cwd=cwd, env=env, check=True)
+
+
+def output(command: list[str], *, cwd: Path = ROOT, env: dict[str, str] | None = None) -> str:
+    print("+ " + " ".join(command), flush=True)
+    completed = subprocess.run(command, cwd=cwd, env=env, check=True, stdout=subprocess.PIPE, text=True)
+    print(completed.stdout, end="")
+    return completed.stdout.strip()
+
+
+def project_version() -> str:
+    try:
+        import tomllib
+    except ImportError as exc:
+        raise SystemExit("Python 3.11+ is required for release verification.") from exc
+    payload = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    return str(payload["project"]["version"])
+
+
+def assert_cli_version(command: list[str]) -> None:
+    expected = f"clifwrap {project_version()}"
+    actual = output([*command, "--version"])
+    if actual != expected:
+        raise SystemExit(f"{' '.join(command)} --version mismatch: expected {expected!r}, got {actual!r}")
 
 
 def isolated_runtime_env(root: Path) -> dict[str, str]:
@@ -122,6 +145,16 @@ def workflow_contracts() -> None:
     for required in ("Generate RELEASE-MANIFEST.json", "gh release upload \"$TAG\" release-assets/RELEASE-MANIFEST.json --repo \"$GITHUB_REPOSITORY\" --clobber"):
         if required not in release_text:
             raise SystemExit(f"release.yml is missing required release manifest fragment: {required}")
+    for job_name, job in jobs.items():
+        if not isinstance(job, dict):
+            continue
+        for step in job.get("steps", []):
+            if not isinstance(step, dict):
+                continue
+            run = step.get("run", "")
+            if isinstance(run, str) and "python - <<'PY'" in run and step.get("shell") != "bash":
+                step_name = step.get("name", "<unnamed>")
+                raise SystemExit(f"release.yml {job_name}/{step_name} heredoc step must use shell: bash")
 
     publish_needs = set(_as_list(jobs["publish"].get("needs")))
     expected_publish_needs = {"resolve", "validate", "package", "binaries", "checksums"}
@@ -163,6 +196,13 @@ def workflow_contracts() -> None:
     release_please_text = (ROOT / ".github" / "workflows" / "release-please.yml").read_text(encoding="utf-8")
     if "workflow_dispatch" not in release_please_text:
         raise SystemExit("release-please.yml must support manual reruns")
+    release_please_config = json.loads((ROOT / "release-please-config.json").read_text(encoding="utf-8"))
+    package_config = release_please_config.get("packages", {}).get(".", {})
+    extra_files = package_config.get("extra-files", [])
+    if not any(isinstance(entry, dict) and entry.get("path") == "src/clifwrap/__init__.py" for entry in extra_files):
+        raise SystemExit("release-please-config.json must update the frozen CLI version fallback")
+    if "x-release-please-version" not in (ROOT / "src" / "clifwrap" / "__init__.py").read_text(encoding="utf-8"):
+        raise SystemExit("src/clifwrap/__init__.py must mark the frozen CLI version for release-please")
 
     print("workflow contracts ok")
 
@@ -363,7 +403,7 @@ def wheel_smoke() -> None:
             python = venv / "bin" / "python"
             clifwrap = venv / "bin" / "clifwrap"
         run([str(python), "-m", "pip", "install", str(wheel)])
-        run([str(clifwrap), "--version"])
+        assert_cli_version([str(clifwrap)])
         run([str(clifwrap), "sample-config"])
         run([str(clifwrap), "doctor", "--json", "--check"], env=isolated_runtime_env(tmp_path))
 
@@ -404,7 +444,7 @@ def pyinstaller_smoke() -> None:
         raise SystemExit("PyInstaller is required for binary smoke; install with `python -m pip install -e '.[release]'` or pass --skip-pyinstaller.")
     run([sys.executable, "-m", "PyInstaller", "--onefile", "--name", "clifwrap", "--collect-data", "clifwrap", "packaging/pyinstaller/entrypoint.py"])
     binary = DIST / ("clifwrap.exe" if sys.platform == "win32" else "clifwrap")
-    run([str(binary), "--version"])
+    assert_cli_version([str(binary)])
     run([str(binary), "sample-config"])
     with tempfile.TemporaryDirectory(prefix="clifwrap-binary-") as tmp:
         run([str(binary), "doctor", "--json", "--check"], env=isolated_runtime_env(Path(tmp)))

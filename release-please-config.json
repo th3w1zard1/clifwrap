@@ -5,7 +5,13 @@
       "release-type": "python",
       "package-name": "clifwrap",
       "include-component-in-tag": false,
-      "changelog-path": "CHANGELOG.md"
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        {
+          "type": "generic",
+          "path": "src/clifwrap/__init__.py"
+        }
+      ]
     }
   }
 }

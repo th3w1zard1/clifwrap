@@ -1,6 +1,6 @@
 # clifwrap
 
-[![CI](https://github.com/clifwrap/clifwrap/actions/workflows/ci.yml/badge.svg)](https://github.com/clifwrap/clifwrap/actions/workflows/ci.yml)
+[![CI](https://github.com/th3w1zard1/clifwrap/actions/workflows/ci.yml/badge.svg)](https://github.com/th3w1zard1/clifwrap/actions/workflows/ci.yml)
 
 `clifwrap` installs reversible shims in front of existing CLIs like `tvly` and `firecrawl`, then retries the same command against alternate accounts when a configured account is exhausted, rate-limited, unauthenticated, or otherwise matches a retry rule.
 
@@ -339,6 +339,6 @@ firecrawl search "example"
 
 ## Release Automation
 
-The repository is intended to live at `github.com/clifwrap/clifwrap`, with project reports published to `https://clifwrap.github.io`.
+The public repository lives at `github.com/th3w1zard1/clifwrap`, with project reports published to `https://th3w1zard1.github.io/clifwrap/`.
 
 Release automation uses `release-please` plus validation workflows. Manually created GitHub releases are marked prerelease while tests, PyInstaller builds, artifact uploads, `SHA256SUMS`, and `RELEASE-MANIFEST.json` generation run; the workflow only clears prerelease after those gates succeed.

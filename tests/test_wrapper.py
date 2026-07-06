@@ -223,9 +223,12 @@ class WrapperTests(unittest.TestCase):
         self.assertIn("RELEASE-MANIFEST.json", source)
         self.assertIn("site / \"schemas\" / \"release-manifest.v1.json\"", source)
         self.assertIn("release.yml is missing required release manifest fragment", source)
+        self.assertIn("heredoc step must use shell: bash", source)
         self.assertIn("codeql.yml must skip private repos", source)
         self.assertIn("dependency-review.yml must skip private repos", source)
         self.assertIn("release-please.yml must support manual reruns", source)
+        self.assertIn("release-please-config.json must update the frozen CLI version fallback", source)
+        self.assertIn("src/clifwrap/__init__.py must mark the frozen CLI version for release-please", source)
         self.assertIn('gh release edit \\"$TAG\\" --repo \\"$GITHUB_REPOSITORY\\" --prerelease=true', source)
         self.assertIn('gh release edit \\"$TAG\\" --repo \\"$GITHUB_REPOSITORY\\" --prerelease=false', source)
         self.assertIn("clifwrap-windows-arm64", source)
@@ -292,7 +295,7 @@ class WrapperTests(unittest.TestCase):
 
     def test_release_manifest_schema_matches_manifest_url(self) -> None:
         schema = json.loads(RELEASE_MANIFEST_SCHEMA.read_text())
-        self.assertEqual(schema["$id"], "https://clifwrap.github.io/schemas/release-manifest.v1.json")
+        self.assertEqual(schema["$id"], "https://th3w1zard1.github.io/clifwrap/schemas/release-manifest.v1.json")
         self.assertEqual(schema["properties"]["schema"]["const"], schema["$id"])
         self.assertEqual(schema["properties"]["project"]["const"], "clifwrap")
         self.assertIn("artifacts", schema["required"])
