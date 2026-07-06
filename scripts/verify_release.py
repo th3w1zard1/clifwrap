@@ -219,6 +219,15 @@ def workflow_contracts() -> None:
         raise SystemExit("release-please-config.json must update the frozen CLI version fallback")
     if "x-release-please-version" not in (ROOT / "src" / "clifwrap" / "__init__.py").read_text(encoding="utf-8"):
         raise SystemExit("src/clifwrap/__init__.py must mark the frozen CLI version for release-please")
+    release_docs = (ROOT / "docs" / "release.md").read_text(encoding="utf-8")
+    for required in (
+        "Release Please workflow immediately gates that release through validation",
+        "marks the created release as `prerelease`",
+        "dispatches `release.yml` with the created tag",
+        "releases created by a workflow token should not rely on follow-on release events",
+    ):
+        if required not in release_docs:
+            raise SystemExit(f"docs/release.md is missing required Release Please gate documentation: {required}")
 
     print("workflow contracts ok")
 

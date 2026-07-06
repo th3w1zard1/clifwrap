@@ -51,6 +51,15 @@ The verifier also enforces workflow contracts that are easy to weaken accidental
 
 `release-please` owns version bumps, changelog updates, tags, and GitHub release creation from merged conventional commits.
 
+When `release-please` creates a GitHub release, the Release Please workflow immediately gates that release through validation before users should treat it as stable:
+
+1. The workflow marks the created release as `prerelease`.
+2. The workflow dispatches `release.yml` with the created tag.
+3. Release validation runs tests, builds Python distributions, builds platform binaries, publishes checksums, and publishes `RELEASE-MANIFEST.json`.
+4. Only the validation workflow clears `prerelease` after every required validation, packaging, binary, and checksum job succeeds.
+
+This explicit dispatch is required because releases created by a workflow token should not rely on follow-on release events to trigger another workflow. The direct dispatch keeps Release Please-created releases and manually created releases on the same validation path.
+
 Configuration lives in:
 
 - `release-please-config.json`
