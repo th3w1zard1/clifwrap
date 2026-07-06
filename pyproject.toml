@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clifwrap"
+version = "0.1.0"
+description = "Transparent quota-aware failover and auth management for account-backed CLIs."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "clifwrap maintainers" }]
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["cli", "failover", "rate-limit", "quota", "tavily", "firecrawl"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: System :: Systems Administration",
+]
+
+[project.urls]
+Homepage = "https://clifwrap.github.io"
+Repository = "https://github.com/clifwrap/clifwrap"
+Issues = "https://github.com/clifwrap/clifwrap/issues"
+Documentation = "https://clifwrap.github.io"
+
+[project.scripts]
+clifwrap = "clifwrap.__main__:main"
+
+[project.optional-dependencies]
+dev = [
+    "build>=1.2",
+    "nox>=2024.10",
+    "pyinstaller>=6.0",
+    "PyYAML>=6.0",
+    "pytest>=8.0",
+    "pytest-html>=4.1",
+    "ruff>=0.6",
+]
+release = [
+    "build>=1.2",
+    "pyinstaller>=6.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+clifwrap = ["providers.toml", "py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 140
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F"]
+ignore = ["E501"]

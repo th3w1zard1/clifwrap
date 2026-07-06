@@ -1,0 +1,16 @@
+include README.md
+include CONTRIBUTING.md
+include CHANGELOG.md
+include LICENSE
+include SECURITY.md
+include noxfile.py
+include pyproject.toml
+include release-please-config.json
+include .release-please-manifest.json
+include .github/dependabot.yml
+recursive-include docs *.md *.json
+recursive-include packaging *.py
+recursive-include src/clifwrap *.toml py.typed
+recursive-include tests *.py
+recursive-include scripts *.py *.toml
+recursive-include .github/workflows *.yml

@@ -1,0 +1,44 @@
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install package
+        run: python -m pip install -e ".[dev]"
+      - name: Build Pages site
+        run: python -m nox -s pages
+      - name: Upload private Pages preview artifact
+        if: github.event.repository.private == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: pages-site
+          path: site
+      - uses: actions/configure-pages@v5
+        if: github.event.repository.private == false
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event.repository.private == false
+        with:
+          path: site
+      - id: deployment
+        if: github.event.repository.private == false
+        uses: actions/deploy-pages@v4

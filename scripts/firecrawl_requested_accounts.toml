@@ -1,0 +1,24 @@
+provider = "firecrawl"
+target_env = "FIRECRAWL_API_KEY"
+env_file = "~/.config/secrets.env"
+env_name_template = "CLIFWRAP_{provider_slug}_{account_slug}_{target_env_slug}"
+set_default = true
+
+[validation]
+url = "https://api.firecrawl.dev/v2/team/credit-usage"
+auth_header = "Authorization"
+auth_scheme = "Bearer"
+content_type = "application/json"
+remaining_path = "data.remainingCredits"
+
+[[accounts]]
+label = "firecrawl-primary"
+
+[[accounts]]
+label = "firecrawl-secondary"
+
+[[accounts]]
+label = "firecrawl-tertiary"
+
+[[accounts]]
+label = "firecrawl-quaternary"

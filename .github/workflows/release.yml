@@ -1,0 +1,268 @@
+name: Release Validation
+
+on:
+  release:
+    types: [created, published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to validate and publish artifacts for.
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-validation-${{ github.event.release.tag_name || inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: Resolve release
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - id: release
+        name: Resolve tag
+        env:
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          tag="${EVENT_TAG:-$INPUT_TAG}"
+          if [ -z "$tag" ]; then
+            echo "release tag is required" >&2
+            exit 2
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Keep release prerelease during validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: gh release edit "$TAG" --prerelease=true
+
+  validate:
+    name: Validate Python ${{ matrix.python-version }}
+    needs: resolve
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Download actionlint
+        id: get_actionlint
+        if: matrix.python-version == '3.14'
+        run: bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+        shell: bash
+      - name: Actionlint
+        if: matrix.python-version == '3.14'
+        run: ${{ steps.get_actionlint.outputs.executable }} -color
+        shell: bash
+      - name: Install package
+        run: python -m pip install -e ".[dev]"
+      - name: Ruff
+        if: matrix.python-version == '3.14'
+        run: python -m nox -s lint
+      - name: Tests
+        run: python -m nox -s tests-${{ matrix.python-version }}
+      - name: Compile
+        if: matrix.python-version == '3.14'
+        run: python -m nox -s compile
+      - name: Upload release reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-validation-reports-${{ matrix.python-version }}
+          path: reports/
+          if-no-files-found: ignore
+
+  package:
+    name: Package Python distributions
+    needs: [resolve, validate]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install build dependency
+        run: python -m pip install build
+      - name: Build source distribution and wheel
+        run: python -m build
+      - name: Upload Python distributions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+        run: gh release upload "$TAG" dist/* --clobber
+
+  binaries:
+    name: ${{ matrix.asset }}
+    needs: [resolve, validate]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            asset: clifwrap-linux-amd64
+            binary: clifwrap
+            archive: tar.gz
+          - os: ubuntu-24.04-arm
+            asset: clifwrap-linux-arm64
+            binary: clifwrap
+            archive: tar.gz
+          - os: macos-15-intel
+            asset: clifwrap-macos-amd64
+            binary: clifwrap
+            archive: tar.gz
+          - os: macos-15
+            asset: clifwrap-macos-arm64
+            binary: clifwrap
+            archive: tar.gz
+          - os: windows-2022
+            asset: clifwrap-windows-amd64
+            binary: clifwrap.exe
+            archive: zip
+          - os: windows-11-arm
+            asset: clifwrap-windows-arm64
+            binary: clifwrap.exe
+            archive: zip
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install release dependencies
+        run: python -m pip install -e ".[release]"
+      - name: Build one-file binary
+        run: python -m PyInstaller --onefile --name clifwrap --collect-data clifwrap packaging/pyinstaller/entrypoint.py
+      - name: Smoke test binary
+        shell: bash
+        run: |
+          if [ -f "dist/clifwrap.exe" ]; then
+            ./dist/clifwrap.exe --version
+          else
+            ./dist/clifwrap --version
+          fi
+      - name: Package binary
+        env:
+          ASSET: ${{ matrix.asset }}
+          BINARY: ${{ matrix.binary }}
+          ARCHIVE: ${{ matrix.archive }}
+        run: |
+          python - <<'PY'
+          import os
+          import shutil
+          import tarfile
+          import zipfile
+          from pathlib import Path
+
+          asset = os.environ["ASSET"]
+          binary = os.environ["BINARY"]
+          archive = os.environ["ARCHIVE"]
+          root = Path("artifacts") / asset
+          root.mkdir(parents=True, exist_ok=True)
+          shutil.copy2(Path("dist") / binary, root / binary)
+          if archive == "zip":
+              with zipfile.ZipFile(Path("artifacts") / f"{asset}.zip", "w", compression=zipfile.ZIP_DEFLATED) as zf:
+                  zf.write(root / binary, arcname=f"{asset}/{binary}")
+          else:
+              with tarfile.open(Path("artifacts") / f"{asset}.tar.gz", "w:gz") as tf:
+                  tf.add(root / binary, arcname=f"{asset}/{binary}")
+          PY
+      - name: Upload binary to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+          ASSET: ${{ matrix.asset }}
+          ARCHIVE: ${{ matrix.archive }}
+        shell: bash
+        run: |
+          if [ "$ARCHIVE" = "zip" ]; then
+            gh release upload "$TAG" "artifacts/$ASSET.zip" --clobber
+          else
+            gh release upload "$TAG" "artifacts/$ASSET.tar.gz" --clobber
+          fi
+
+  checksums:
+    name: Publish release checksums
+    needs: [resolve, package, binaries]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+        run: |
+          mkdir -p release-assets
+          gh release download "$TAG" --dir release-assets --clobber --pattern "clifwrap-*"
+      - name: Generate SHA256SUMS
+        run: |
+          cd release-assets
+          rm -f SHA256SUMS
+          sha256sum clifwrap-* | sort -k2 > SHA256SUMS
+          cat SHA256SUMS
+      - name: Generate RELEASE-MANIFEST.json
+        env:
+          TAG: ${{ needs.resolve.outputs.tag }}
+        run: |
+          cd release-assets
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          artifacts = sorted(Path(".").glob("clifwrap-*"))
+          manifest = {
+              "schema": "https://clifwrap.github.io/schemas/release-manifest.v1.json",
+              "project": "clifwrap",
+              "tag": os.environ["TAG"],
+              "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "artifacts": [
+                  {
+                      "name": artifact.name,
+                      "size": artifact.stat().st_size,
+                      "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                  }
+                  for artifact in artifacts
+              ],
+          }
+          Path("RELEASE-MANIFEST.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+      - name: Upload SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+        run: gh release upload "$TAG" release-assets/SHA256SUMS --clobber
+      - name: Upload RELEASE-MANIFEST.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+        run: gh release upload "$TAG" release-assets/RELEASE-MANIFEST.json --clobber
+
+  publish:
+    name: Mark release stable
+    needs: [resolve, validate, package, binaries, checksums]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clear prerelease after validation succeeds
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+        run: gh release edit "$TAG" --prerelease=false
