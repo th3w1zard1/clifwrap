@@ -165,7 +165,7 @@ For the four requested Firecrawl accounts, keep only the account labels and reus
 clifwrap account import-spec scripts/firecrawl_requested_accounts.toml --apply
 ```
 
-The spec can include a `[validation]` table with a usage endpoint, auth header, auth scheme, content type, and response path. `clifwrap account import-spec` validates each candidate API key before adding it and never prints key values. If a key is missing or invalid, it reports the missing account without creating a fake config entry. Account-specific env-var names are optional; specs can use `env_name_template` to derive storage names instead of hardcoding a list for every account.
+The spec can include a `[validation]` table with a usage endpoint, auth header, auth scheme, content type, and response path. `clifwrap account import-spec` validates each candidate API key before adding it and never prints key values. If a key is missing or invalid, it reports the missing account without creating a fake config entry. Re-running `clifwrap account import-spec --apply` is declarative: existing accounts are updated to the current target env ref, env file, and enabled state instead of being duplicated. Account-specific env-var names are optional; specs can use `env_name_template` to derive storage names instead of hardcoding a list for every account.
 
 If you need to obtain those four keys through Firecrawl's interactive login flow instead of pre-populating env vars, run:
 

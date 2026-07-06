@@ -271,7 +271,7 @@ def main(argv: list[str] | None = None) -> int:
             results = import_account_spec(Path(args.spec), env_file_override=args.env_file, dry_run=not args.apply)
             for result in results:
                 print(f"{result.account}: {result.status}: {result.detail}")
-            return 0 if all(result.status != "missing" for result in results) else 2
+            return 0 if all(result.status not in {"missing", "invalid"} for result in results) else 2
         raise SystemExit("account requires a subcommand")
     if args.command == "queue":
         if args.queue_command == "list":

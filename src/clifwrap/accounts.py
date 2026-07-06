@@ -290,11 +290,18 @@ def import_account_spec(path: Path, *, env_file_override: str | None = None, dry
                 detail += f" ({validation_detail})"
             results.append(ImportResult(account=account.name, status=status, detail=detail))
         elif existing:
-            set_account_enabled(spec.provider, account.name, enabled=account.enabled)
-            detail = f"using existing account with {selected}"
+            update_account_secret_source(
+                spec.provider,
+                account.name,
+                target_env=spec.target_env,
+                env_ref=selected,
+                env_file=env_file,
+                enabled=account.enabled,
+            )
+            detail = f"{spec.target_env}=env:{selected}"
             if validation_detail:
                 detail += f" ({validation_detail})"
-            results.append(ImportResult(account=account.name, status="enabled" if account.enabled else "disabled", detail=detail))
+            results.append(ImportResult(account=account.name, status="updated", detail=detail))
         else:
             append_account(
                 spec.provider,
@@ -382,6 +389,76 @@ def _account_block_bounds(text: str, app: str, name: str) -> tuple[int, int, lis
         if accounts and accounts[0].get("name") == name:
             return start, end, lines
     raise ValueError(f"Account {name!r} does not exist for provider {app!r}")
+
+
+def _render_account_block(app: str, account: dict[str, object]) -> list[str]:
+    lines = [_account_header(app)]
+    name = account.get("name")
+    if not isinstance(name, str) or not name:
+        raise ValueError(f"Account for provider {app!r} does not have a valid name")
+    lines.append(f"name = {_quote(name)}")
+    if account.get("enabled") is False:
+        lines.append("enabled = false")
+    env_files = account.get("env_files")
+    if isinstance(env_files, list) and all(isinstance(item, str) for item in env_files) and env_files:
+        lines.append(f"env_files = {_command_array(env_files)}")
+    env = account.get("env")
+    if isinstance(env, dict):
+        rendered_env = {str(key): str(value) for key, value in env.items()}
+        if rendered_env:
+            lines.append(f"env = {_inline_table(rendered_env)}")
+    env_command = account.get("env_command")
+    if isinstance(env_command, dict):
+        rendered_commands = {
+            str(key): [str(part) for part in value]
+            for key, value in env_command.items()
+            if isinstance(value, list) and all(isinstance(part, str) for part in value)
+        }
+        if rendered_commands:
+            lines.append(f"env_command = {_command_dict(rendered_commands)}")
+    prepare_on = account.get("prepare_on")
+    prepare_command = account.get("prepare_command")
+    if isinstance(prepare_on, str) and prepare_on != "always":
+        lines.append(f"prepare_on = {_quote(prepare_on)}")
+    if isinstance(prepare_command, list) and all(isinstance(part, str) for part in prepare_command):
+        lines.append(f"prepare_command = {_command_array(prepare_command)}")
+    lines.append("")
+    return lines
+
+
+def update_account_secret_source(
+    app: str,
+    name: str,
+    *,
+    target_env: str,
+    env_ref: str,
+    env_file: str | None,
+    enabled: bool,
+) -> Path:
+    path = config_path()
+    if not path.exists():
+        raise ValueError("Config does not exist")
+    text = path.read_text()
+    start, end, lines = _account_block_bounds(text, app, name)
+    block_body = "".join(lines[start + 1 : end])
+    parsed = tomllib.loads("[[accounts]]\n" + block_body)
+    account = dict(parsed["accounts"][0])
+    account["enabled"] = enabled
+    if env_file:
+        current_env_files = account.get("env_files")
+        env_files = list(current_env_files) if isinstance(current_env_files, list) else []
+        if env_file not in env_files:
+            env_files.append(env_file)
+        account["env_files"] = env_files
+    env = account.get("env")
+    if not isinstance(env, dict):
+        env = {}
+    env[target_env] = f"env:{env_ref}"
+    account["env"] = env
+    replacement = [line + "\n" for line in _render_account_block(app, account)]
+    lines[start:end] = replacement
+    path.write_text("".join(lines))
+    return path
 
 
 def remove_account(app: str, name: str) -> Path:

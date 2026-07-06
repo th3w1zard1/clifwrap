@@ -2110,6 +2110,54 @@ class WrapperTests(unittest.TestCase):
         self.assertIn("team beta: missing: no secret source found for this account", dry_run.stdout)
         self.assertNotIn("expected one of", dry_run.stdout)
 
+    def test_account_import_spec_reconciles_existing_accounts(self) -> None:
+        init = self._run("init")
+        self.assertEqual(init.returncode, 0, init.stderr)
+        secrets = Path(self.temp_dir.name) / "secrets.env"
+        secrets.write_text('TOKEN_OLD="old-secret"\nTOKEN_NEW="new-secret"\n')
+        spec = Path(self.temp_dir.name) / "accounts.toml"
+        spec.write_text(
+            textwrap.dedent(
+                f"""\
+                provider = "somecli"
+                target_env = "SOMECLI_TOKEN"
+                env_file = "{secrets}"
+
+                [[accounts]]
+                label = "team"
+                env_names = ["TOKEN_OLD"]
+                """
+            )
+        )
+        first = self._run("account", "import-spec", str(spec), "--apply")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertIn("team: added: SOMECLI_TOKEN=env:TOKEN_OLD", first.stdout)
+
+        spec.write_text(
+            textwrap.dedent(
+                f"""\
+                provider = "somecli"
+                target_env = "SOMECLI_TOKEN"
+                env_file = "{secrets}"
+
+                [[accounts]]
+                label = "team"
+                env_names = ["TOKEN_NEW"]
+                enabled = false
+                """
+            )
+        )
+        second = self._run("account", "import-spec", str(spec), "--apply")
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertIn("team: updated: SOMECLI_TOKEN=env:TOKEN_NEW", second.stdout)
+        config_text = (self.config_dir / "config.toml").read_text()
+        self.assertEqual(config_text.count('name = "team"'), 1)
+        self.assertIn('enabled = false', config_text)
+        self.assertIn('env = { SOMECLI_TOKEN = "env:TOKEN_NEW" }', config_text)
+        self.assertNotIn("TOKEN_OLD", config_text)
+        self.assertNotIn("old-secret", config_text)
+        self.assertNotIn("new-secret", config_text)
+
     def test_account_import_spec_can_validate_secrets_before_import(self) -> None:
         from clifwrap.accounts import import_account_spec
 
@@ -2157,6 +2205,20 @@ class WrapperTests(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].status, "invalid")
         self.assertIn("validation failed", results[0].detail)
+
+    def test_account_import_spec_cli_exits_nonzero_for_invalid_results(self) -> None:
+        from clifwrap.__main__ import main
+        from clifwrap.accounts import ImportResult
+
+        output = StringIO()
+        with mock.patch(
+            "clifwrap.__main__.import_account_spec",
+            return_value=[ImportResult(account="team", status="invalid", detail="TOKEN: validation failed")],
+        ):
+            with redirect_stdout(output):
+                rc = main(["account", "import-spec", "unused.toml", "--apply"])
+        self.assertEqual(rc, 2)
+        self.assertIn("team: invalid: TOKEN: validation failed", output.getvalue())
 
     def test_capacity_control_config_loads_and_env_overrides(self) -> None:
         from clifwrap.config import load_config, merged_provider
