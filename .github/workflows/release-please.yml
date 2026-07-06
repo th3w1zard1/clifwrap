@@ -27,7 +27,8 @@ jobs:
         run: |
           head_sha="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$RELEASE_BRANCH" --json headRefOid --jq '.[0].headRefOid // ""')"
           if [ -n "$head_sha" ]; then
-            gh workflow run release-pr-validation.yml --repo "$GITHUB_REPOSITORY" --ref main -f ref="$head_sha"
+            gh workflow run release-pr-validation.yml --repo "$GITHUB_REPOSITORY" --ref "$RELEASE_BRANCH" -f ref="$head_sha" ||
+              gh workflow run release-pr-validation.yml --repo "$GITHUB_REPOSITORY" --ref main -f ref="$head_sha"
           fi
       - name: Gate created release through validation
         if: ${{ steps.release.outputs.release_created }}

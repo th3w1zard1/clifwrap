@@ -249,7 +249,7 @@ def workflow_contracts() -> None:
     for required in (
         "if: ${{ steps.release.outputs.release_created }}",
         "TAG: ${{ steps.release.outputs.tag_name }}",
-        "gh workflow run release-pr-validation.yml --repo \"$GITHUB_REPOSITORY\" --ref main -f ref=\"$head_sha\"",
+        "gh workflow run release-pr-validation.yml --repo \"$GITHUB_REPOSITORY\" --ref \"$RELEASE_BRANCH\" -f ref=\"$head_sha\"",
         "gh release edit \"$TAG\" --repo \"$GITHUB_REPOSITORY\" --prerelease=true",
         "gh workflow run release.yml --repo \"$GITHUB_REPOSITORY\" --ref main -f tag=\"$TAG\"",
     ):
