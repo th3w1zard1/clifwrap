@@ -72,6 +72,36 @@ Supported account fields:
 
 `CLIFWRAP_ACCOUNT=<name>` starts a single wrapped command from a specific enabled account without changing config.
 
+## Declarative Account Imports
+
+`clifwrap account import-spec <path>` reads a TOML account spec and reports what would happen without writing config. Use `--apply` to reconcile the local config.
+
+Imports are idempotent. Existing accounts are matched by provider and account label, then reconciled to the current target env ref, env file, and enabled state instead of appended again. Existing account metadata such as `env_command`, `prepare_command`, and `prepare_on` is preserved.
+
+Dry-run statuses are intentionally explicit:
+
+- `would-add`: the account has a usable secret source and does not exist yet.
+- `would-update`: the account exists, but the spec would change its target env ref, env file membership, or enabled state.
+- `exists`: the account already matches the spec.
+- `missing`: no configured env source was found for that account.
+- `invalid`: validation was configured and the candidate secret failed validation.
+
+Specs can list explicit env names or use a template so provider/account labels stay data-driven:
+
+```toml
+provider = "somecli"
+target_env = "SOMECLI_TOKEN"
+env_file = "~/.config/secrets.env"
+env_name_template = "CLIFWRAP_{provider_slug}_{account_slug}_{target_env_slug}"
+
+[[accounts]]
+label = "team alpha"
+
+[[accounts]]
+label = "team beta"
+enabled = false
+```
+
 ## Auth Management
 
 Wrapper-managed auth aliases are separate from upstream auth commands. This lets commands such as `tvly logins` or `firecrawl accounts` manage wrapper accounts while a bare canonical auth command can still pass through to the real CLI.

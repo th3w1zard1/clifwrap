@@ -284,7 +284,9 @@ def import_account_spec(path: Path, *, env_file_override: str | None = None, dry
             continue
         existing = account.name in account_names(spec.provider)
         if dry_run:
-            status = "exists" if existing else "would-add"
+            status = "would-update" if _account_import_needs_update(spec.provider, account.name, spec.target_env, selected, env_file, account.enabled) else "exists"
+            if not existing:
+                status = "would-add"
             detail = f"{spec.target_env}=env:{selected}"
             if validation_detail:
                 detail += f" ({validation_detail})"
@@ -321,6 +323,20 @@ def import_account_spec(path: Path, *, env_file_override: str | None = None, dry
             set_default_account(spec.provider, default_candidate)
         results.append(ImportResult(account=default_candidate, status="default", detail=f"{spec.provider} default account"))
     return results
+
+
+def _account_import_needs_update(app: str, name: str, target_env: str, env_ref: str, env_file: str | None, enabled: bool) -> bool:
+    provider = load_config().providers.get(app)
+    if not provider:
+        return False
+    existing = next((account for account in provider.accounts if account.name == name), None)
+    if not existing:
+        return False
+    if existing.enabled != enabled:
+        return True
+    if existing.env.get(target_env) != f"env:{env_ref}":
+        return True
+    return bool(env_file and env_file not in existing.env_files)
 
 
 def append_account(

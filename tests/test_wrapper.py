@@ -2158,6 +2158,82 @@ class WrapperTests(unittest.TestCase):
         self.assertNotIn("old-secret", config_text)
         self.assertNotIn("new-secret", config_text)
 
+    def test_account_import_spec_dry_run_reports_existing_updates(self) -> None:
+        init = self._run("init")
+        self.assertEqual(init.returncode, 0, init.stderr)
+        secrets = Path(self.temp_dir.name) / "secrets.env"
+        secrets.write_text('TOKEN_OLD="old-secret"\nTOKEN_NEW="new-secret"\n')
+        added = self._run("account", "add", "somecli", "team", "--env-file", str(secrets), "--env-ref", "SOMECLI_TOKEN=TOKEN_OLD")
+        self.assertEqual(added.returncode, 0, added.stderr)
+        spec = Path(self.temp_dir.name) / "accounts.toml"
+        spec.write_text(
+            textwrap.dedent(
+                f"""\
+                provider = "somecli"
+                target_env = "SOMECLI_TOKEN"
+                env_file = "{secrets}"
+
+                [[accounts]]
+                label = "team"
+                env_names = ["TOKEN_NEW"]
+                """
+            )
+        )
+        dry_run = self._run("account", "import-spec", str(spec))
+        self.assertEqual(dry_run.returncode, 0, dry_run.stderr)
+        self.assertIn("team: would-update: SOMECLI_TOKEN=env:TOKEN_NEW", dry_run.stdout)
+        config_text = (self.config_dir / "config.toml").read_text()
+        self.assertIn('env = { SOMECLI_TOKEN = "env:TOKEN_OLD" }', config_text)
+        self.assertNotIn("TOKEN_NEW", config_text)
+
+    def test_account_import_spec_preserves_existing_account_metadata(self) -> None:
+        init = self._run("init")
+        self.assertEqual(init.returncode, 0, init.stderr)
+        secrets = Path(self.temp_dir.name) / "secrets.env"
+        secrets.write_text('TOKEN_OLD="old-secret"\nTOKEN_NEW="new-secret"\n')
+        added = self._run(
+            "account",
+            "add",
+            "somecli",
+            "team",
+            "--env-file",
+            str(secrets),
+            "--env-ref",
+            "SOMECLI_TOKEN=TOKEN_OLD",
+            "--env-command",
+            f"SOMECLI_SESSION={sys.executable} -c \"print('session')\"",
+            "--prepare-on",
+            "once",
+            "--prepare-command",
+            "somecli",
+            "login",
+        )
+        self.assertEqual(added.returncode, 0, added.stderr)
+        spec = Path(self.temp_dir.name) / "accounts.toml"
+        spec.write_text(
+            textwrap.dedent(
+                f"""\
+                provider = "somecli"
+                target_env = "SOMECLI_TOKEN"
+                env_file = "{secrets}"
+
+                [[accounts]]
+                label = "team"
+                env_names = ["TOKEN_NEW"]
+                """
+            )
+        )
+        applied = self._run("account", "import-spec", str(spec), "--apply")
+        self.assertEqual(applied.returncode, 0, applied.stderr)
+        self.assertIn("team: updated: SOMECLI_TOKEN=env:TOKEN_NEW", applied.stdout)
+        config_text = (self.config_dir / "config.toml").read_text()
+        self.assertIn('env = { SOMECLI_TOKEN = "env:TOKEN_NEW" }', config_text)
+        self.assertIn("env_command", config_text)
+        self.assertIn("SOMECLI_SESSION", config_text)
+        self.assertIn('prepare_on = "once"', config_text)
+        self.assertIn("prepare_command", config_text)
+        self.assertIn('prepare_command = ["somecli", "login"]', config_text)
+
     def test_account_import_spec_can_validate_secrets_before_import(self) -> None:
         from clifwrap.accounts import import_account_spec
 
