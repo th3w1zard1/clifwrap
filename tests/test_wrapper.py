@@ -2969,6 +2969,26 @@ class WrapperTests(unittest.TestCase):
         self.assertEqual(len(remaining_payload["items"]), 1)
         self.assertEqual(remaining_payload["items"][0]["argv"], ["search", "fresh"])
 
+    def test_queue_list_json_surfaces_malformed_queue_state_as_json_error(self) -> None:
+        queue_path = self.state_dir / "queue.json"
+        queue_path.write_text('{"items": "not-a-list"}\n')
+        listed = self._run("queue", "list", "--json")
+        self.assertEqual(listed.returncode, 1)
+        self.assertEqual(listed.stderr, "")
+        payload = json.loads(listed.stdout)
+        self.assertEqual(payload["items"], [])
+        self.assertIn("Malformed queue state", payload["error"])
+
+    def test_queue_drop_json_surfaces_malformed_queue_state_as_json_error(self) -> None:
+        queue_path = self.state_dir / "queue.json"
+        queue_path.write_text('{"items": "not-a-list"}\n')
+        dropped = self._run("queue", "drop", "--json")
+        self.assertEqual(dropped.returncode, 1)
+        self.assertEqual(dropped.stderr, "")
+        payload = json.loads(dropped.stdout)
+        self.assertEqual(payload["dropped"], [])
+        self.assertIn("Malformed queue state", payload["error"])
+
     def test_queue_decision_prunes_expired_items_before_queue_limit(self) -> None:
         from clifwrap.state import enqueue_queue_item
 

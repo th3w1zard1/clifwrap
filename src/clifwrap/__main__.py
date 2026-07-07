@@ -278,6 +278,9 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 items = list_queue_items(args.app)
             except ValueError as exc:
+                if args.json:
+                    sys.stdout.write(json.dumps({"error": str(exc), "items": []}, indent=2, sort_keys=True) + "\n")
+                    return 1
                 raise SystemExit(str(exc))
             payload = {
                 "items": [
@@ -312,6 +315,9 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 dropped = drop_queue_items(set(args.ids) if args.ids else None, provider=args.app, expired_only=args.expired)
             except ValueError as exc:
+                if args.json:
+                    sys.stdout.write(json.dumps({"dropped": [], "error": str(exc)}, indent=2, sort_keys=True) + "\n")
+                    return 1
                 raise SystemExit(str(exc))
             payload = {
                 "dropped": [
