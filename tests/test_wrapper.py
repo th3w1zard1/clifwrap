@@ -2583,6 +2583,91 @@ class WrapperTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(proc.stdout.strip(), "body from pipe")
 
+    def test_open_inherited_stdin_without_eof_does_not_hang(self) -> None:
+        target = self.bin_dir / "somecli"
+        make_executable(
+            target,
+            "#!/usr/bin/env python3\nimport sys\nprint('ok:' + sys.stdin.read())\n",
+        )
+        self._run("install", "somecli")
+        (self.config_dir / "config.toml").write_text(
+            textwrap.dedent(
+                """\
+                [providers.somecli]
+                [[providers.somecli.accounts]]
+                name = "only"
+                """
+            )
+        )
+        read_fd, write_fd = os.pipe()
+        try:
+            proc = subprocess.Popen(
+                ["somecli", "search"],
+                cwd=ROOT,
+                env=self.env,
+                stdin=read_fd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        finally:
+            os.close(read_fd)
+        try:
+            stdout, stderr = proc.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.communicate()
+            self.fail("wrapper hung waiting for inherited stdin EOF")
+        finally:
+            os.close(write_fd)
+        self.assertEqual(proc.returncode, 0, stderr)
+        self.assertEqual(stdout.strip(), "ok:")
+
+    def test_piped_stdin_still_captured_for_failover_replay(self) -> None:
+        target = self.bin_dir / "somecli"
+        make_executable(
+            target,
+            textwrap.dedent(
+                """\
+                #!/usr/bin/env python3
+                import os
+                import sys
+                body = sys.stdin.read()
+                if os.environ.get("CLIFWRAP_ACCOUNT") == "primary":
+                    print("usage limit exceeded", file=sys.stderr)
+                    raise SystemExit(3)
+                print("replayed:" + body, end="")
+                """
+            ),
+        )
+        self._run("install", "somecli")
+        (self.config_dir / "config.toml").write_text(
+            textwrap.dedent(
+                """\
+                [providers.somecli]
+                retry_exit_codes = [3]
+
+                [[providers.somecli.accounts]]
+                name = "primary"
+
+                [[providers.somecli.accounts]]
+                name = "backup"
+                """
+            )
+        )
+        proc = subprocess.run(
+            ["somecli", "search"],
+            cwd=ROOT,
+            env=self.env,
+            input="payload-from-pipe",
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.stdout, "replayed:payload-from-pipe")
+        self.assertIn("retrying with backup", proc.stderr)
+
     def test_capacity_admission_restricts_retry_failover_to_approved_account(self) -> None:
         target = self.bin_dir / "somecli"
         backup_marker = Path(self.temp_dir.name) / "backup-ran.txt"
