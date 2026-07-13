@@ -329,8 +329,37 @@ def _prepare_account(provider: ProviderConfig, account: AccountConfig, merged_en
         marker.write_text(json.dumps({"digest": digest}, indent=2) + "\n")
 
 
+def _stdin_capture_timeout_seconds() -> float:
+    raw = os.environ.get("CLIFWRAP_STDIN_CAPTURE_TIMEOUT", "0.1")
+    try:
+        value = float(raw)
+    except ValueError:
+        return 0.1
+    return max(value, 0.0)
+
+
+def _stdin_ready(timeout: float) -> bool:
+    try:
+        import select
+    except ImportError:
+        return True
+    try:
+        ready, _, _ = select.select([sys.stdin], [], [], timeout)
+    except (OSError, ValueError):
+        return True
+    return bool(ready)
+
+
 def _capture_stdin() -> bytes | None:
+    """Capture piped stdin for failover replay without hanging forever.
+
+    Agent/IDE shells often leave an inherited pipe open with no writer and no
+    EOF. A blocking ``read()`` never returns in that case, so wait briefly for
+    readability and treat a quiet stdin as absent.
+    """
     if sys.stdin.isatty():
+        return None
+    if not _stdin_ready(_stdin_capture_timeout_seconds()):
         return None
     return sys.stdin.buffer.read()
 
@@ -350,9 +379,11 @@ def _run_once(
     account_name: str | None,
 ) -> AttemptResult:
     argv = [app, *command[1:], *args]
+    # When no stdin was captured, feed EOF instead of inheriting an open pipe
+    # that may never close (common under agent shells).
     proc = subprocess.run(
         argv,
-        input=stdin_data,
+        input=b"" if stdin_data is None else stdin_data,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         env=env,
