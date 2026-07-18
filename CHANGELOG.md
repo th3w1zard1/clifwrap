@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/oldrepublicwizard/clifwrap/compare/v0.3.0...v0.3.1) (2026-07-18)
+
+
+### Bug Fixes
+
+* correct tvly/firecrawl capacity costs and soft-reserve admission ([37154f0](https://github.com/oldrepublicwizard/clifwrap/commit/37154f0177047fcb0cb53cd1703e2ae1f0fddea0))
+* tvly/firecrawl capacity costs and soft-reserve admission ([4ec7ae5](https://github.com/oldrepublicwizard/clifwrap/commit/4ec7ae59fae904d8545e1722b2be5234cda2c73e))
+
 ## [0.3.0](https://github.com/th3w1zard1/clifwrap/compare/v0.2.2...v0.3.0) (2026-07-07)
 
 
