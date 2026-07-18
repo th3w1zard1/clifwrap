@@ -1043,22 +1043,45 @@ def _status_snapshot(app: str, provider: ProviderConfig) -> dict:
     if remaining_values:
         payload["total_remaining"] = sum(remaining_values)
     if provider.capacity_control:
-        required = provider.capacity_control.reserve_threshold + provider.capacity_control.default_cost
-        ready_accounts = [account["name"] for account in accounts if account["enabled"] and isinstance(account["remaining"], int) and account["remaining"] >= required]
+        cost_floor = provider.capacity_control.default_cost
+        preferred = provider.capacity_control.reserve_threshold + provider.capacity_control.default_cost
+        ready_accounts = [
+            account["name"]
+            for account in accounts
+            if account["enabled"] and isinstance(account["remaining"], int) and account["remaining"] >= preferred
+        ]
+        affordable_accounts = [
+            account["name"]
+            for account in accounts
+            if account["enabled"] and isinstance(account["remaining"], int) and account["remaining"] >= cost_floor
+        ]
         unknown_accounts = [account["name"] for account in accounts if account["enabled"] and account["remaining"] is None]
-        unhealthy = queue_error is not None or bool(queue_total) or not ready_accounts
-        if unknown_accounts and not ready_accounts:
+        unhealthy = queue_error is not None or bool(queue_total) or not affordable_accounts
+        if unknown_accounts and not affordable_accounts:
             message = (
-                f"[clifwrap] {app} capacity is unknown or below the configured reserve "
-                f"(required remaining {required}, queue backlog {queue_total})"
+                f"[clifwrap] {app} capacity is unknown or below the command cost floor "
+                f"(cost floor {cost_floor}, preferred remaining {preferred}, queue backlog {queue_total})"
             )
         elif ready_accounts:
-            message = f"[clifwrap] {app} capacity healthy: {', '.join(ready_accounts)} meet required remaining {required}"
+            message = (
+                f"[clifwrap] {app} capacity healthy: {', '.join(ready_accounts)} meet preferred remaining {preferred}"
+            )
+        elif affordable_accounts:
+            message = (
+                f"[clifwrap] {app} capacity usable but below soft reserve: "
+                f"{', '.join(affordable_accounts)} meet cost floor {cost_floor} "
+                f"(preferred {preferred}); queue backlog {queue_total}"
+            )
         else:
-            message = f"[clifwrap] {app} no account currently meets required remaining {required}; queue backlog {queue_total}"
+            message = (
+                f"[clifwrap] {app} no account currently meets cost floor {cost_floor}; "
+                f"queue backlog {queue_total}"
+            )
         payload["capacity_health"] = {
-            "required_remaining": required,
+            "required_remaining": cost_floor,
+            "preferred_remaining": preferred,
             "ready_accounts": ready_accounts,
+            "affordable_accounts": affordable_accounts,
             "unknown_accounts": unknown_accounts,
             "queue_backlog": queue_total,
             "message": message,

@@ -3203,6 +3203,68 @@ class WrapperTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(proc.stdout.strip(), "secret-value")
 
+    def test_soft_reserve_allows_account_above_cost_floor(self) -> None:
+        """Accounts below preferred reserve but above command cost must still run."""
+        target = self.bin_dir / "somecli"
+        make_executable(
+            target,
+            "#!/usr/bin/env python3\nimport os\nprint(os.environ.get('CLIFWRAP_ACCOUNT'))\n",
+        )
+        self._run("install", "somecli")
+        (self.config_dir / "config.toml").write_text(
+            textwrap.dedent(
+                f"""\
+                [providers.somecli]
+                status_command = ["{sys.executable}", "-c", "import os,json; print(json.dumps({{'remaining': int(os.environ['LEFT'])}}))"]
+
+                [providers.somecli.capacity_control]
+                default_action = "queue"
+                reserve_threshold = 25
+                default_cost = 1
+                command_costs = {{ search = 1 }}
+
+                [[providers.somecli.accounts]]
+                name = "low"
+                env = {{ LEFT = "16" }}
+                """
+            )
+        )
+        proc = subprocess.run(
+            ["somecli", "search", "query"],
+            cwd=ROOT,
+            env=self.env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.stdout.strip(), "low")
+
+    def test_builtin_tvly_search_cost_is_not_crawl_scale(self) -> None:
+        from clifwrap.scheduling import estimate_command_cost
+        from clifwrap.config import CapacityControlConfig, ProviderConfig
+
+        text = (ROOT / "src" / "clifwrap" / "providers.toml").read_text()
+        self.assertRegex(text, r"\[providers\.tvly\.capacity_control\][\s\S]*?command_costs\s*=\s*\{[^}]*search\s*=\s*1")
+        self.assertNotRegex(
+            text,
+            r"\[providers\.tvly\.capacity_control\][\s\S]*?command_costs\s*=\s*\{[^}]*search\s*=\s*25",
+        )
+        tvly = ProviderConfig(
+            name="tvly",
+            capacity_control=CapacityControlConfig(
+                reserve_threshold=5,
+                default_cost=1,
+                command_costs={"search": 1, "extract": 1},
+            ),
+        )
+        self.assertEqual(estimate_command_cost(tvly, ["search", "hello"]), 1)
+        assert tvly.capacity_control is not None
+        self.assertLess(
+            estimate_command_cost(tvly, ["search"]) + tvly.capacity_control.reserve_threshold,
+            50,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

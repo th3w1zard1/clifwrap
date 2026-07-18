@@ -47,12 +47,14 @@ fallback_label = "plan"
 [providers.tvly.capacity_control]
 default_action = "queue"
 unknown_capacity_action = "allow"
-reserve_threshold = 25
-default_cost = 25
+# Tavily bills ~1 credit/basic search and ~2/advanced. Keep a small soft reserve so
+# near-empty keys are deprioritized, but do not inflate search to crawl-scale costs.
+reserve_threshold = 5
+default_cost = 1
 queue_retention_seconds = 86400
 queue_max_items = 100
 snapshot_ttl_seconds = 60
-command_costs = { search = 25, extract = 50, crawl = 100, map = 100 }
+command_costs = { search = 1, extract = 1, map = 1, crawl = 5, research = 15 }
 remediation_message = "Provision another Tavily key or enable another configured account before replaying queued work."
 remediation_commands = [
   "clifwrap account list tvly",
@@ -103,12 +105,13 @@ label = "credits"
 [providers.firecrawl.capacity_control]
 default_action = "queue"
 unknown_capacity_action = "allow"
-reserve_threshold = 25
-default_cost = 5
+# Firecrawl search is ~2 credits; scrape is typically 1+. Soft reserve only.
+reserve_threshold = 5
+default_cost = 1
 queue_retention_seconds = 86400
 queue_max_items = 100
 snapshot_ttl_seconds = 60
-command_costs = { scrape = 5, map = 10, search = 5, crawl = 25, extract = 10 }
+command_costs = { scrape = 1, map = 2, search = 2, crawl = 10, extract = 5 }
 remediation_message = "Provision additional Firecrawl credits or enable another configured account before replaying queued work."
 remediation_commands = [
   "clifwrap account list firecrawl",
