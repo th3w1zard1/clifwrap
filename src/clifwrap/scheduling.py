@@ -193,29 +193,53 @@ def admission_decision(
     if not capacity:
         return AdmissionDecision(action="execute", reason="capacity control disabled", estimated_cost=0, reserve_threshold=0)
     estimated_cost = estimate_command_cost(provider, args)
-    required_remaining = estimated_cost + capacity.reserve_threshold
+    # Hard floor: enough credits to pay for this command.
+    # Soft reserve: prefer accounts that still have headroom above the floor.
+    preferred_remaining = estimated_cost + capacity.reserve_threshold
     named = {snapshot.account_name: snapshot for snapshot in snapshots}
+
+    def _execute(account_name: str, reason: str) -> AdmissionDecision:
+        return AdmissionDecision(
+            action="execute",
+            reason=reason,
+            estimated_cost=estimated_cost,
+            reserve_threshold=capacity.reserve_threshold,
+            account_name=account_name,
+            capacity_approved=True,
+        )
+
     if active_account_name and active_account_name in named:
         active_snapshot = named[active_account_name]
-        if active_snapshot.known and active_snapshot.remaining >= required_remaining:
-            return AdmissionDecision(
-                action="execute",
-                reason=f"{active_account_name} has remaining {active_snapshot.remaining} >= required {required_remaining}",
-                estimated_cost=estimated_cost,
-                reserve_threshold=capacity.reserve_threshold,
-                account_name=active_account_name,
-                capacity_approved=True,
-            )
+        if active_snapshot.known and active_snapshot.remaining is not None:
+            if active_snapshot.remaining >= preferred_remaining:
+                return _execute(
+                    active_account_name,
+                    f"{active_account_name} has remaining {active_snapshot.remaining} >= preferred {preferred_remaining}",
+                )
+
     for snapshot in snapshots:
-        if snapshot.known and snapshot.remaining >= required_remaining:
-            return AdmissionDecision(
-                action="execute",
-                reason=f"{snapshot.account_name} selected with remaining {snapshot.remaining} >= required {required_remaining}",
-                estimated_cost=estimated_cost,
-                reserve_threshold=capacity.reserve_threshold,
-                account_name=snapshot.account_name,
-                capacity_approved=True,
+        if snapshot.known and snapshot.remaining is not None and snapshot.remaining >= preferred_remaining:
+            return _execute(
+                snapshot.account_name,
+                f"{snapshot.account_name} selected with remaining {snapshot.remaining} >= preferred {preferred_remaining}",
             )
+
+    # Fall back to any account that can afford the command even if below soft reserve.
+    if active_account_name and active_account_name in named:
+        active_snapshot = named[active_account_name]
+        if active_snapshot.known and active_snapshot.remaining is not None and active_snapshot.remaining >= estimated_cost:
+            return _execute(
+                active_account_name,
+                f"{active_account_name} has remaining {active_snapshot.remaining} >= cost {estimated_cost} (below soft reserve {preferred_remaining})",
+            )
+
+    for snapshot in snapshots:
+        if snapshot.known and snapshot.remaining is not None and snapshot.remaining >= estimated_cost:
+            return _execute(
+                snapshot.account_name,
+                f"{snapshot.account_name} selected with remaining {snapshot.remaining} >= cost {estimated_cost} (below soft reserve {preferred_remaining})",
+            )
+
     if snapshots and all(not snapshot.known for snapshot in snapshots):
         if capacity.unknown_capacity_action == "allow":
             return AdmissionDecision(
@@ -247,7 +271,7 @@ def admission_decision(
     if capacity.default_action == "execute":
         return AdmissionDecision(
             action="execute",
-            reason="no account met the reserve threshold, but policy allows execution",
+            reason="no account met the cost floor, but policy allows execution",
             estimated_cost=estimated_cost,
             reserve_threshold=capacity.reserve_threshold,
             account_name=active_account_name or (snapshots[0].account_name if snapshots else None),
@@ -258,13 +282,13 @@ def admission_decision(
             provider,
             args,
             stdin_data,
-            f"no account has the required remaining capacity ({required_remaining})",
+            f"no account has the required remaining capacity ({estimated_cost})",
             estimated_cost,
             existing_item=existing_item,
         )
     return AdmissionDecision(
         action="shed",
-        reason=f"no account has the required remaining capacity ({required_remaining})",
+        reason=f"no account has the required remaining capacity ({estimated_cost})",
         estimated_cost=estimated_cost,
         reserve_threshold=capacity.reserve_threshold,
         remediation_message=remediation_message(provider),
